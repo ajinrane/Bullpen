@@ -1131,7 +1131,7 @@ const NotesSection = ({ symbol, notes, onAddNote, onDeleteNote, currentUser, isC
   );
 };
 
-const PortfolioSummary = ({ positions, stockData, currentUser, allUsers }) => {
+const PortfolioSummary = ({ positions, stockData, currentUser, allUsers, onAddPositionCTA, theme }) => {
   const userPortfolios = useMemo(() => {
     const portfolios = {};
     allUsers.forEach(user => {
@@ -1151,17 +1151,80 @@ const PortfolioSummary = ({ positions, stockData, currentUser, allUsers }) => {
     });
     return portfolios;
   }, [positions, stockData, allUsers]);
-  
-  const sortedUsers = [...allUsers].sort((a, b) => 
+
+  const sortedUsers = [...allUsers].sort((a, b) =>
     (userPortfolios[b]?.totalGainLossPercent || 0) - (userPortfolios[a]?.totalGainLossPercent || 0)
   );
-  
+
+  const getMedal = (index) => {
+    if (index === 0) return '🥇';
+    if (index === 1) return '🥈';
+    if (index === 2) return '🥉';
+    return `#${index + 1}`;
+  };
+
+  const myPortfolio = userPortfolios[currentUser];
+  const myRank = sortedUsers.filter(u => userPortfolios[u]?.positionCount > 0).indexOf(currentUser) + 1;
+  const hasPositions = myPortfolio?.positionCount > 0;
+
   return (
-    <div className="bg-slate-800 rounded-xl p-4 mb-6">
-      <h2 className="text-lg font-bold text-white mb-4 flex items-center gap-2">
-        <Users className="w-5 h-5" /> Portfolio Leaderboard
+    <div className={`rounded-xl p-6 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      {/* Your Stats Card - Blue Gradient */}
+      <div className="mb-6 p-5 rounded-xl text-white" style={{ background: 'linear-gradient(135deg, #0A84FF 0%, #5E5CE6 100%)' }}>
+        <div className="flex justify-between items-start mb-4">
+          <div>
+            <h3 className="text-white/80 text-sm font-medium mb-1">Your Performance</h3>
+            <div className="flex items-center gap-2">
+              <UserAvatar username={currentUser} size="md" />
+              <span className="font-bold text-xl">{currentUser}</span>
+            </div>
+          </div>
+          {hasPositions && (
+            <div className="text-right">
+              <div className="text-white/80 text-sm">Rank</div>
+              <div className="text-3xl font-bold">{getMedal(myRank - 1)}</div>
+            </div>
+          )}
+        </div>
+
+        {hasPositions ? (
+          <div className="grid grid-cols-3 gap-4">
+            <div>
+              <div className="text-white/70 text-xs mb-1">Portfolio Value</div>
+              <div className="text-xl font-bold">${myPortfolio.totalValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</div>
+            </div>
+            <div>
+              <div className="text-white/70 text-xs mb-1">Total P/L</div>
+              <div className={`text-xl font-bold ${myPortfolio.totalGainLoss >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                {myPortfolio.totalGainLoss >= 0 ? '+' : ''}${myPortfolio.totalGainLoss.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div>
+              <div className="text-white/70 text-xs mb-1">Return</div>
+              <div className={`text-xl font-bold ${myPortfolio.totalGainLossPercent >= 0 ? 'text-green-300' : 'text-red-300'}`}>
+                {myPortfolio.totalGainLossPercent >= 0 ? '+' : ''}{myPortfolio.totalGainLossPercent.toFixed(2)}%
+              </div>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-4">
+            <p className="text-white/80 mb-3">Start tracking your positions to compete on the leaderboard!</p>
+            <button
+              onClick={onAddPositionCTA}
+              className="px-6 py-2 bg-white text-blue-600 rounded-lg font-semibold hover:bg-white/90 transition-colors"
+            >
+              <Plus className="w-4 h-4 inline mr-2" />
+              Add Your First Position
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Leaderboard */}
+      <h2 className={`text-lg font-bold mb-4 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+        <Users className="w-5 h-5" /> Leaderboard
       </h2>
-      
+
       <div className="space-y-3">
         {sortedUsers.map((user, index) => {
           const portfolio = userPortfolios[user];
@@ -1169,27 +1232,38 @@ const PortfolioSummary = ({ positions, stockData, currentUser, allUsers }) => {
           const isProfit = portfolio.totalGainLossPercent >= 0;
           const color = getUserColor(user);
           const isCurrentUser = user === currentUser;
-          
+
           return (
-            <div key={user} className={`flex items-center justify-between p-4 rounded-lg ${isCurrentUser ? color.light : 'bg-slate-700'}`}>
+            <div key={user} className={`flex items-center justify-between p-4 rounded-lg transition-all ${isCurrentUser ? 'ring-2 ring-blue-500' : ''} ${theme === 'dark' ? (isCurrentUser ? color.light : 'bg-slate-700') : (isCurrentUser ? 'bg-blue-50' : 'bg-slate-50')}`}>
               <div className="flex items-center gap-3">
-                <span className="text-2xl font-bold text-slate-400 w-8">#{index + 1}</span>
+                <span className="text-2xl font-bold w-10 text-center">{getMedal(index)}</span>
                 <UserAvatar username={user} size="md" />
-                <span className={`font-semibold text-lg ${isCurrentUser ? color.text : 'text-white'}`}>{user}</span>
-                {isCurrentUser && <span className="text-xs bg-blue-500/30 text-blue-400 px-2 py-0.5 rounded">You</span>}
+                <div>
+                  <span className={`font-semibold ${isCurrentUser ? color.text : theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{user}</span>
+                  {isCurrentUser && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded">You</span>}
+                  <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {portfolio.positionCount} position{portfolio.positionCount !== 1 ? 's' : ''} · ${portfolio.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                  </div>
+                </div>
               </div>
               <div className="text-right">
-                <div className={`text-2xl font-bold ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                <div className={`text-xl font-bold ${isProfit ? 'text-green-500' : 'text-red-500'}`}>
                   {isProfit ? '+' : ''}{portfolio.totalGainLossPercent.toFixed(2)}%
                 </div>
-                <div className="text-xs text-slate-400">{portfolio.positionCount} position{portfolio.positionCount !== 1 ? 's' : ''}</div>
+                <div className={`text-xs ${isProfit ? 'text-green-400' : 'text-red-400'}`}>
+                  {isProfit ? '+' : ''}${portfolio.totalGainLoss.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                </div>
               </div>
             </div>
           );
         })}
-        
+
         {sortedUsers.filter(u => userPortfolios[u]?.positionCount > 0).length === 0 && (
-          <p className="text-slate-500 text-center py-4">No positions tracked yet. Add your buy prices to compete!</p>
+          <div className={`text-center py-8 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+            <Users className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p className="font-medium mb-2">No positions tracked yet</p>
+            <p className="text-sm">Add your buy prices to compete on the leaderboard!</p>
+          </div>
         )}
       </div>
     </div>
@@ -1326,14 +1400,115 @@ const ShareModal = ({ watchlistId, onClose }) => {
   );
 };
 
+const WelcomeModal = ({ onComplete }) => {
+  const [step, setStep] = useState(0);
+  const [name, setName] = useState('');
+
+  const steps = [
+    {
+      title: 'Welcome to Stock Watchlist!',
+      icon: '👋',
+      description: 'Track your favorite stocks, compete with friends, and make smarter investment decisions together.',
+    },
+    {
+      title: 'Track Your Performance',
+      icon: '📈',
+      description: 'Add positions with your buy price to track P/L. See how you rank against other investors on the leaderboard.',
+    },
+    {
+      title: 'Collaborate & Share',
+      icon: '🤝',
+      description: 'Share your watchlist with friends, leave notes on stocks, and see what others are bullish or bearish on.',
+    },
+  ];
+
+  const handleNext = () => {
+    if (step < 2) {
+      setStep(step + 1);
+    }
+  };
+
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    if (name.trim()) {
+      localStorage.setItem('has-seen-welcome', 'true');
+      onComplete(name.trim());
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
+        {step < 3 ? (
+          <>
+            {/* Progress dots */}
+            <div className="flex justify-center gap-2 mb-6">
+              {[0, 1, 2].map(i => (
+                <div
+                  key={i}
+                  className={`w-2 h-2 rounded-full transition-all ${i === step ? 'w-6 bg-blue-500' : i < step ? 'bg-blue-500' : 'bg-slate-300'}`}
+                />
+              ))}
+            </div>
+
+            <div className="text-center mb-6">
+              <div className="text-5xl mb-4">{steps[step].icon}</div>
+              <h2 className="text-2xl font-bold text-slate-800 mb-2">{steps[step].title}</h2>
+              <p className="text-slate-500">{steps[step].description}</p>
+            </div>
+
+            {step === 2 ? (
+              <form onSubmit={handleSubmit}>
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                  autoFocus
+                />
+                <button
+                  type="submit"
+                  disabled={!name.trim()}
+                  className="w-full py-3 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
+                  style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
+                >
+                  Get Started
+                </button>
+              </form>
+            ) : (
+              <button
+                onClick={handleNext}
+                className="w-full py-3 text-white font-semibold rounded-xl transition-all"
+                style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
+              >
+                Next
+              </button>
+            )}
+
+            {step < 2 && (
+              <button
+                onClick={() => setStep(2)}
+                className="w-full py-2 text-slate-500 text-sm mt-2 hover:text-slate-700"
+              >
+                Skip
+              </button>
+            )}
+          </>
+        ) : null}
+      </div>
+    </div>
+  );
+};
+
 const UserSetupModal = ({ onSetUser }) => {
   const [name, setName] = useState('');
-  
+
   const handleSubmit = (e) => {
     e.preventDefault();
     if (name.trim()) onSetUser(name.trim());
   };
-  
+
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
@@ -1349,6 +1524,211 @@ const UserSetupModal = ({ onSetUser }) => {
             Get Started
           </button>
         </form>
+      </div>
+    </div>
+  );
+};
+
+// User Dropdown Menu
+const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSector, onShowPortfolio, toggleTheme }) => {
+  const [isOpen, setIsOpen] = useState(false);
+  const dropdownRef = useRef(null);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+        setIsOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const menuItems = [
+    { icon: Bell, label: 'Price Alerts', onClick: () => { onShowAlerts(); setIsOpen(false); } },
+    { icon: PieChartIcon, label: 'Sector Allocation', onClick: () => { onShowSector(); setIsOpen(false); } },
+    { icon: Wallet, label: 'Portfolio Value', onClick: () => { onShowPortfolio(); setIsOpen(false); } },
+    { icon: theme === 'dark' ? Sun : Moon, label: theme === 'dark' ? 'Light Mode' : 'Dark Mode', onClick: () => { toggleTheme(); setIsOpen(false); } },
+    { divider: true },
+    { icon: X, label: 'Sign Out', onClick: () => { onSignOut(); setIsOpen(false); }, danger: true },
+  ];
+
+  return (
+    <div className="relative" ref={dropdownRef}>
+      <button
+        onClick={() => setIsOpen(!isOpen)}
+        className="flex items-center gap-2 px-4 py-2 rounded-xl transition-all hover:shadow-md"
+        style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}
+      >
+        <UserAvatar username={currentUser} size="sm" />
+        <span className="font-medium text-slate-800">{currentUser}</span>
+        <ChevronDown className={`w-4 h-4 text-slate-500 transition-transform ${isOpen ? 'rotate-180' : ''}`} />
+      </button>
+
+      {isOpen && (
+        <div
+          className="absolute right-0 mt-2 w-56 rounded-xl shadow-lg overflow-hidden z-50"
+          style={{ background: theme === 'dark' ? '#1e293b' : 'white', border: '1px solid rgba(0,0,0,0.1)' }}
+        >
+          {menuItems.map((item, idx) =>
+            item.divider ? (
+              <div key={idx} className={`border-t ${theme === 'dark' ? 'border-slate-700' : 'border-slate-200'}`} />
+            ) : (
+              <button
+                key={idx}
+                onClick={item.onClick}
+                className={`w-full flex items-center gap-3 px-4 py-3 text-left transition-colors ${
+                  item.danger
+                    ? 'text-red-500 hover:bg-red-50'
+                    : theme === 'dark'
+                    ? 'text-slate-300 hover:bg-slate-700'
+                    : 'text-slate-700 hover:bg-slate-50'
+                }`}
+              >
+                <item.icon className="w-4 h-4" />
+                {item.label}
+              </button>
+            )
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Help/Info Modal
+const HelpModal = ({ onClose, theme }) => {
+  const [activeTab, setActiveTab] = useState('how');
+
+  const tabs = [
+    { id: 'how', label: 'How It Works' },
+    { id: 'positions', label: 'Positions' },
+    { id: 'stances', label: 'Stances' },
+    { id: 'invite', label: 'Inviting' },
+    { id: 'faq', label: 'FAQ' },
+  ];
+
+  const content = {
+    how: (
+      <div className="space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-blue-500 text-white flex items-center justify-center font-bold">1</div>
+          <div>
+            <h4 className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Add Stocks</h4>
+            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Add ticker symbols to your watchlist to track prices in real-time.</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center font-bold">2</div>
+          <div>
+            <h4 className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Track Positions</h4>
+            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Add your buy price and shares to see your P/L and compete on the leaderboard.</p>
+          </div>
+        </div>
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-full bg-purple-500 text-white flex items-center justify-center font-bold">3</div>
+          <div>
+            <h4 className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Compete & Collaborate</h4>
+            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>See how your portfolio ranks, share notes, and track what others are bullish on.</p>
+          </div>
+        </div>
+      </div>
+    ),
+    positions: (
+      <div className={theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>
+        <p className="mb-3">Track your positions to see real-time profit/loss:</p>
+        <ul className="list-disc pl-5 space-y-2">
+          <li>Click on a stock card and expand "More Details"</li>
+          <li>Add your buy price and number of shares</li>
+          <li>See your P/L update as prices change</li>
+          <li>Your total return determines your leaderboard rank</li>
+        </ul>
+      </div>
+    ),
+    stances: (
+      <div className={theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>
+        <p className="mb-3">Share your outlook on each stock:</p>
+        <div className="space-y-3">
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-green-500/20 text-green-500 rounded font-medium">Bullish</span>
+            <span>You expect the stock to go up</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-slate-500/20 text-slate-500 rounded font-medium">Neutral</span>
+            <span>No strong opinion</span>
+          </div>
+          <div className="flex items-center gap-3">
+            <span className="px-3 py-1 bg-red-500/20 text-red-500 rounded font-medium">Bearish</span>
+            <span>You expect the stock to go down</span>
+          </div>
+        </div>
+      </div>
+    ),
+    invite: (
+      <div className={theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>
+        <p className="mb-3">Invite friends to collaborate:</p>
+        <ol className="list-decimal pl-5 space-y-2">
+          <li>Click the "Share" button in the header</li>
+          <li>Copy the unique watchlist link</li>
+          <li>Send it to your friends</li>
+          <li>They'll join the same watchlist and can add positions</li>
+        </ol>
+        <p className="mt-4 p-3 bg-blue-500/10 text-blue-500 rounded-lg text-sm">
+          Everyone with the link can view and contribute to the watchlist!
+        </p>
+      </div>
+    ),
+    faq: (
+      <div className="space-y-4">
+        <div>
+          <h4 className={`font-semibold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Where does the data come from?</h4>
+          <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Stock prices are fetched from Finnhub API in real-time.</p>
+        </div>
+        <div>
+          <h4 className={`font-semibold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Is my data saved?</h4>
+          <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>Yes! All data is synced via Supabase and persists across sessions.</p>
+        </div>
+        <div>
+          <h4 className={`font-semibold mb-1 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Can I use real money here?</h4>
+          <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}>No, this is for tracking only. No actual trading happens.</p>
+        </div>
+      </div>
+    ),
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50" onClick={onClose}>
+      <div
+        className="rounded-2xl max-w-lg w-full mx-4 max-h-[80vh] overflow-hidden"
+        style={{ background: theme === 'dark' ? '#1e293b' : 'white' }}
+        onClick={e => e.stopPropagation()}
+      >
+        <div className="flex items-center justify-between p-4 border-b" style={{ borderColor: theme === 'dark' ? '#334155' : '#e2e8f0' }}>
+          <h2 className={`text-xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>Help & Info</h2>
+          <button onClick={onClose} className={`p-1 rounded hover:bg-slate-200 ${theme === 'dark' ? 'text-slate-400 hover:bg-slate-700' : ''}`}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="flex border-b overflow-x-auto" style={{ borderColor: theme === 'dark' ? '#334155' : '#e2e8f0' }}>
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`px-4 py-3 text-sm font-medium whitespace-nowrap transition-colors ${
+                activeTab === tab.id
+                  ? 'text-blue-500 border-b-2 border-blue-500'
+                  : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="p-6 overflow-y-auto" style={{ maxHeight: 'calc(80vh - 120px)' }}>
+          {content[activeTab]}
+        </div>
       </div>
     </div>
   );
@@ -1612,11 +1992,16 @@ const StockDashboard = () => {
 
   const [currentUser, setCurrentUser] = useState(() => localStorage.getItem('stock-username') || '');
   const [showUserSetup, setShowUserSetup] = useState(!currentUser);
+  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('has-seen-welcome') && !currentUser);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [showHelpModal, setShowHelpModal] = useState(false);
 
   // Theme state
   const [theme, setTheme] = useState(() => localStorage.getItem('stock-theme') || 'dark');
-  
+
+  // Tab state - default to leaderboard
+  const [activeTab, setActiveTab] = useState('leaderboard');
+
   const [symbols, setSymbols] = useState(() => {
     const saved = localStorage.getItem(`watchlist-${watchlistId}-symbols`);
     return saved ? JSON.parse(saved) : ['AAPL', 'MSFT', 'GOOGL'];
@@ -1630,7 +2015,7 @@ const StockDashboard = () => {
   const [error, setError] = useState(null);
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
-  
+
   // View and filter state
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'compact'
   const [sortBy, setSortBy] = useState('symbol'); // 'symbol' | 'holders' | 'change' | 'sector'
@@ -1640,7 +2025,7 @@ const StockDashboard = () => {
   // Comparison mode state
   const [comparisonMode, setComparisonMode] = useState(false);
   const [selectedForComparison, setSelectedForComparison] = useState([]);
-  
+
   const [notes, setNotes] = useState([]);
   const [positions, setPositions] = useState([]);
   const [stances, setStances] = useState([]);
@@ -1704,6 +2089,18 @@ const StockDashboard = () => {
     setCurrentUser(name);
     localStorage.setItem('stock-username', name);
     setShowUserSetup(false);
+    setShowWelcome(false);
+  };
+
+  const handleSignOut = () => {
+    localStorage.removeItem('stock-username');
+    localStorage.removeItem('has-seen-welcome');
+    setCurrentUser('');
+    setShowUserSetup(true);
+  };
+
+  const handleWelcomeComplete = (name) => {
+    handleSetUser(name);
   };
 
   // Load Supabase data
@@ -2091,35 +2488,55 @@ const StockDashboard = () => {
     return meta?.added_by === currentUser || !meta?.added_by;
   };
 
+  // Show welcome modal for first-time users
+  if (showWelcome && !currentUser) {
+    return <WelcomeModal onComplete={handleWelcomeComplete} />;
+  }
+
   if (showUserSetup) return <UserSetupModal onSetUser={handleSetUser} />;
 
   return (
-    <div className="min-h-screen p-4 md:p-6" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
+    <div className="min-h-screen p-4 md:p-6" style={{ background: theme === 'dark' ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl md:text-4xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>Stock Watchlist</h1>
+              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Stock Watchlist</h1>
               <span className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full font-medium ${isConnected ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`} style={{ boxShadow: isConnected ? '0 0 8px rgba(52,199,89,0.5)' : 'none' }}></span>
                 {isConnected ? 'Live' : 'Offline'}
               </span>
             </div>
-            <p className="text-slate-500">{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
+            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
           </div>
 
           <div className="flex items-center gap-2">
-            <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <UserAvatar username={currentUser} size="sm" />
-              <span className="font-medium text-slate-800">{currentUser}</span>
-              <button onClick={() => setShowUserSetup(true)} className="text-slate-400 hover:text-blue-500 transition-colors ml-1">
-                <Edit3 className="w-4 h-4" />
-              </button>
-            </div>
+            {/* Help Button */}
+            <button
+              onClick={() => setShowHelpModal(true)}
+              className={`p-2 rounded-xl transition-all ${theme === 'dark' ? 'text-slate-400 hover:text-white hover:bg-slate-700' : 'text-slate-500 hover:text-slate-800'}`}
+              style={{ background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
+              title="Help & Info"
+            >
+              <AlertCircle className="w-5 h-5" />
+            </button>
+
+            {/* User Dropdown */}
+            <UserDropdown
+              currentUser={currentUser}
+              theme={theme}
+              onSignOut={handleSignOut}
+              onShowAlerts={() => setShowPriceAlerts(true)}
+              onShowSector={() => setShowSectorAllocation(true)}
+              onShowPortfolio={() => setShowPortfolioValue(true)}
+              toggleTheme={toggleTheme}
+            />
+
+            {/* Feed Button */}
             <button onClick={() => setShowFeed(!showFeed)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${showFeed ? 'text-white shadow-lg' : 'text-slate-600 hover:text-blue-500'}`}
-              style={showFeed ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 15px rgba(175,82,222,0.3)' } : { background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${showFeed ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-blue-500'}`}
+              style={showFeed ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 15px rgba(175,82,222,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
               <Activity className="w-4 h-4" /> Feed
               {feedItems.length > 0 && (
                 <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${showFeed ? 'bg-white/20 text-white' : 'bg-purple-500 text-white'}`}>
@@ -2127,12 +2544,34 @@ const StockDashboard = () => {
                 </span>
               )}
             </button>
+
+            {/* Share Button */}
             <button onClick={() => setShowShareModal(true)}
               className="flex items-center gap-2 px-5 py-2 text-white rounded-xl font-medium transition-all hover:shadow-lg"
               style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' }}>
               <Share2 className="w-4 h-4" /> Share
             </button>
           </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex gap-2 mb-6">
+          <button
+            onClick={() => setActiveTab('leaderboard')}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all ${activeTab === 'leaderboard' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
+            style={activeTab === 'leaderboard' ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
+          >
+            <Users className="w-4 h-4 inline mr-2" />
+            Leaderboard
+          </button>
+          <button
+            onClick={() => setActiveTab('watchlist')}
+            className={`px-6 py-3 rounded-xl font-semibold transition-all ${activeTab === 'watchlist' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
+            style={activeTab === 'watchlist' ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
+          >
+            <Star className="w-4 h-4 inline mr-2" />
+            Watchlist
+          </button>
         </div>
 
         {/* Error */}
@@ -2146,12 +2585,7 @@ const StockDashboard = () => {
           </div>
         )}
 
-        {/* Portfolio Leaderboard */}
-        {positions.length > 0 && (
-          <PortfolioSummary positions={positions} stockData={stockData} currentUser={currentUser} allUsers={allUsers} />
-        )}
-
-        {/* Social Feed */}
+        {/* Social Feed - shows on both tabs */}
         {showFeed && (
           <SocialFeed
             feedItems={feedItems}
@@ -2161,38 +2595,53 @@ const StockDashboard = () => {
           />
         )}
 
-        {/* Summary */}
-        {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <div className="text-slate-500 text-sm font-medium mb-1">Stocks</div>
-              <div className="text-3xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{summary.total}</div>
-            </div>
-            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <div className="text-slate-500 text-sm font-medium mb-1">Today</div>
-              <div className={`text-3xl font-semibold ${summary.avgChange >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ letterSpacing: '-0.02em' }}>
-                {summary.avgChange >= 0 ? '+' : ''}{summary.avgChange.toFixed(2)}%
-              </div>
-            </div>
-            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <div className="text-slate-500 text-sm font-medium mb-1">YTD</div>
-              <div className={`text-3xl font-semibold ${summary.avgYTD >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ letterSpacing: '-0.02em' }}>
-                {summary.avgYTD >= 0 ? '+' : ''}{summary.avgYTD.toFixed(2)}%
-              </div>
-            </div>
-            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
-              <div className="text-slate-500 text-sm font-medium mb-1">Users</div>
-              <div className="text-3xl font-semibold text-slate-800 flex items-center gap-2" style={{ letterSpacing: '-0.02em' }}>
-                {allUsers.length}
-                <div className="flex -space-x-1">
-                  {allUsers.slice(0, 3).map(u => <UserAvatar key={u} username={u} size="sm" />)}
-                </div>
-              </div>
-            </div>
-          </div>
+        {/* LEADERBOARD TAB */}
+        {activeTab === 'leaderboard' && (
+          <PortfolioSummary
+            positions={positions}
+            stockData={stockData}
+            currentUser={currentUser}
+            allUsers={allUsers}
+            onAddPositionCTA={() => setActiveTab('watchlist')}
+            theme={theme}
+          />
         )}
 
-        {/* Controls */}
+        {/* WATCHLIST TAB */}
+        {activeTab === 'watchlist' && (
+          <>
+            {/* Summary */}
+            {summary && (
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                <div className="rounded-2xl p-5" style={{ background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Stocks</div>
+                  <div className={`text-3xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>{summary.total}</div>
+                </div>
+                <div className="rounded-2xl p-5" style={{ background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Today</div>
+                  <div className={`text-3xl font-semibold ${summary.avgChange >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ letterSpacing: '-0.02em' }}>
+                    {summary.avgChange >= 0 ? '+' : ''}{summary.avgChange.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="rounded-2xl p-5" style={{ background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>YTD</div>
+                  <div className={`text-3xl font-semibold ${summary.avgYTD >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ letterSpacing: '-0.02em' }}>
+                    {summary.avgYTD >= 0 ? '+' : ''}{summary.avgYTD.toFixed(2)}%
+                  </div>
+                </div>
+                <div className="rounded-2xl p-5" style={{ background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+                  <div className={`text-sm font-medium mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Users</div>
+                  <div className={`text-3xl font-semibold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>
+                    {allUsers.length}
+                    <div className="flex -space-x-1">
+                      {allUsers.slice(0, 3).map(u => <UserAvatar key={u} username={u} size="sm" />)}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Controls */}
         <div className="rounded-2xl p-5 mb-6" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex gap-2 flex-1">
@@ -2303,71 +2752,71 @@ const StockDashboard = () => {
               </div>
             </div>
           )}
-        </div>
+            </div>
 
-        {/* Comparison Chart */}
-        {comparisonMode && selectedForComparison.length >= 2 && (
-          <ComparisonChart
-            selectedStocks={selectedForComparison}
-            stockData={stockData}
-            theme={theme}
-            onClose={() => {
-              setComparisonMode(false);
-              setSelectedForComparison([]);
-            }}
-          />
-        )}
+            {/* Comparison Chart */}
+            {comparisonMode && selectedForComparison.length >= 2 && (
+              <ComparisonChart
+                selectedStocks={selectedForComparison}
+                stockData={stockData}
+                theme={theme}
+                onClose={() => {
+                  setComparisonMode(false);
+                  setSelectedForComparison([]);
+                }}
+              />
+            )}
 
-        {/* News Feed */}
-        {showNewsFeed && (
-          <NewsFeed
-            symbols={symbols}
-            theme={theme}
-            onClose={() => setShowNewsFeed(false)}
-          />
-        )}
+            {/* News Feed */}
+            {showNewsFeed && (
+              <NewsFeed
+                symbols={symbols}
+                theme={theme}
+                onClose={() => setShowNewsFeed(false)}
+              />
+            )}
 
-        {/* Sector Allocation */}
-        {showSectorAllocation && (
-          <SectorAllocation
-            stockData={stockData}
-            positions={positions}
-            currentUser={currentUser}
-            theme={theme}
-            onClose={() => setShowSectorAllocation(false)}
-          />
-        )}
+            {/* Sector Allocation */}
+            {showSectorAllocation && (
+              <SectorAllocation
+                stockData={stockData}
+                positions={positions}
+                currentUser={currentUser}
+                theme={theme}
+                onClose={() => setShowSectorAllocation(false)}
+              />
+            )}
 
-        {/* Portfolio Value Chart */}
-        {showPortfolioValue && (
-          <PortfolioValueChart
-            stockData={stockData}
-            positions={positions}
-            currentUser={currentUser}
-            theme={theme}
-            onClose={() => setShowPortfolioValue(false)}
-          />
-        )}
+            {/* Portfolio Value Chart */}
+            {showPortfolioValue && (
+              <PortfolioValueChart
+                stockData={stockData}
+                positions={positions}
+                currentUser={currentUser}
+                theme={theme}
+                onClose={() => setShowPortfolioValue(false)}
+              />
+            )}
 
-        {/* Price Alerts */}
-        {showPriceAlerts && (
-          <PriceAlertManager
-            stockData={stockData}
-            theme={theme}
-            onClose={() => setShowPriceAlerts(false)}
-          />
-        )}
+            {/* Price Alerts */}
+            {showPriceAlerts && (
+              <PriceAlertManager
+                stockData={stockData}
+                theme={theme}
+                onClose={() => setShowPriceAlerts(false)}
+              />
+            )}
 
-        {/* Stock Grid or Compact List */}
-        {loading && Object.keys(stockData).length === 0 ? (
-          <div className="text-center py-20">
-            <RefreshCw className="w-8 h-8 text-blue-400 animate-spin mx-auto mb-4" />
-            <p className="text-slate-400">Loading stock data...</p>
-          </div>
-        ) : viewMode === 'compact' ? (
-          <div className="space-y-2">
-            {filteredAndSortedStocks.map(stock => (
-              <CompactStockCard
+            {/* Stock Grid or Compact List */}
+            {loading && Object.keys(stockData).length === 0 ? (
+              <div className="text-center py-20">
+                <RefreshCw className="w-8 h-8 text-blue-400 animate-spin mx-auto mb-4" />
+                <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>Loading stock data...</p>
+              </div>
+            ) : viewMode === 'compact' ? (
+              <div className="space-y-2">
+                {filteredAndSortedStocks.map(stock => (
+                  <CompactStockCard
                 key={stock.symbol}
                 stock={stock}
                 canDelete={canDeleteStock(stock.symbol)}
@@ -2379,58 +2828,63 @@ const StockDashboard = () => {
                 isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
                 onToggleComparison={toggleStockComparison}
                 theme={theme}
-              />
-            ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {filteredAndSortedStocks.map(stock => (
-              <StockCard
-                key={stock.symbol}
-                stock={stock}
-                canDelete={canDeleteStock(stock.symbol)}
-                onRemove={removeStock}
-                onExpand={toggleExpand}
-                isExpanded={expandedCards.has(stock.symbol)}
-                isLoading={loadingSymbols.has(stock.symbol)}
-                notes={notes}
-                onAddNote={handleAddNote}
-                onDeleteNote={handleDeleteNote}
-                positions={positions}
-                onAddPosition={handleAddPosition}
-                onRemovePosition={handleRemovePosition}
-                stances={stances}
-                onSetStance={handleSetStance}
-                votes={votes}
-                onVote={handleVote}
-                currentUser={currentUser}
-                isConnected={isConnected}
-                addedBy={stockMeta[stock.symbol]?.added_by}
-                comparisonMode={comparisonMode}
-                isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
-                onToggleComparison={toggleStockComparison}
-                theme={theme}
-              />
-            ))}
-          </div>
-        )}
+                  />
+                ))}
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {filteredAndSortedStocks.map(stock => (
+                  <StockCard
+                    key={stock.symbol}
+                    stock={stock}
+                    canDelete={canDeleteStock(stock.symbol)}
+                    onRemove={removeStock}
+                    onExpand={toggleExpand}
+                    isExpanded={expandedCards.has(stock.symbol)}
+                    isLoading={loadingSymbols.has(stock.symbol)}
+                    notes={notes}
+                    onAddNote={handleAddNote}
+                    onDeleteNote={handleDeleteNote}
+                    positions={positions}
+                    onAddPosition={handleAddPosition}
+                    onRemovePosition={handleRemovePosition}
+                    stances={stances}
+                    onSetStance={handleSetStance}
+                    votes={votes}
+                    onVote={handleVote}
+                    currentUser={currentUser}
+                    isConnected={isConnected}
+                    addedBy={stockMeta[stock.symbol]?.added_by}
+                    comparisonMode={comparisonMode}
+                    isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
+                    onToggleComparison={toggleStockComparison}
+                    theme={theme}
+                  />
+                ))}
+              </div>
+            )}
 
-        {/* Empty State */}
-        {!loading && symbols.length === 0 && (
-          <div className="text-center py-20 bg-slate-800 rounded-xl">
-            <Star className="w-12 h-12 text-slate-600 mx-auto mb-4" />
-            <h3 className="text-xl font-semibold text-white mb-2">No stocks yet</h3>
-            <p className="text-slate-400">Add some tickers above to start tracking</p>
-          </div>
+            {/* Empty State */}
+            {!loading && symbols.length === 0 && (
+              <div className={`text-center py-20 rounded-xl ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+                <Star className={`w-12 h-12 mx-auto mb-4 ${theme === 'dark' ? 'text-slate-600' : 'text-slate-300'}`} />
+                <h3 className={`text-xl font-semibold mb-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>No stocks yet</h3>
+                <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>Add some tickers above to start tracking</p>
+              </div>
+            )}
+          </>
         )}
 
         {/* Footer */}
-        <div className="mt-6 text-center text-slate-500 text-sm">
-          <p>📊 Data from Finnhub · Synced via Supabase</p>
+        <div className={`mt-8 pt-6 border-t text-center ${theme === 'dark' ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
+          <p className="text-sm mb-1">Created by <span className="font-medium">Ajinkya Rane</span></p>
+          <p className="text-xs">Data from Finnhub · Real-time sync via Supabase</p>
         </div>
       </div>
 
+      {/* Modals */}
       {showShareModal && <ShareModal watchlistId={watchlistId} onClose={() => setShowShareModal(false)} />}
+      {showHelpModal && <HelpModal onClose={() => setShowHelpModal(false)} theme={theme} />}
     </div>
   );
 };
