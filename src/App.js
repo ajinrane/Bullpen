@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { TrendingUp, TrendingDown, Plus, X, RefreshCw, Star, ChevronDown, ChevronUp, AlertCircle, MessageSquare, Send, Trash2, Users, Wifi, WifiOff, DollarSign, Target, ThumbsUp, ThumbsDown, Share2, Copy, Check, Edit3, Minus, LayoutGrid, List, Filter, Sun, Moon, BarChart2, Activity } from 'lucide-react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
+import { TrendingUp, TrendingDown, Plus, X, RefreshCw, Star, ChevronDown, ChevronUp, AlertCircle, MessageSquare, Send, Trash2, Users, Wifi, WifiOff, DollarSign, Target, ThumbsUp, ThumbsDown, Share2, Copy, Check, Edit3, Minus, LayoutGrid, List, Filter, Sun, Moon, BarChart2, Activity, Bell, BellRing, Newspaper, PieChart as PieChartIcon, Wallet, ExternalLink } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // ============================================
@@ -153,6 +153,38 @@ const calculatePerformance = (historicalData, currentPrice) => {
     'YTD': ((currentPrice - ytdPrice) / ytdPrice) * 100,
     '1Y': ((currentPrice - yearAgoPrice) / yearAgoPrice) * 100
   };
+};
+
+// Fetch company news from Finnhub
+const fetchCompanyNews = async (symbol) => {
+  try {
+    const now = new Date();
+    const weekAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const from = weekAgo.toISOString().split('T')[0];
+    const to = now.toISOString().split('T')[0];
+    const data = await fetchFinnhub(`/company-news?symbol=${symbol}&from=${from}&to=${to}`);
+    return Array.isArray(data) ? data.slice(0, 10) : [];
+  } catch (error) {
+    console.error(`Error fetching news for ${symbol}:`, error);
+    return [];
+  }
+};
+
+// Sector colors for pie chart
+const SECTOR_COLORS = {
+  'Technology': '#3b82f6',
+  'Healthcare': '#ec4899',
+  'Financial Services': '#22c55e',
+  'Financials': '#22c55e',
+  'Consumer Cyclical': '#f97316',
+  'Communication Services': '#8b5cf6',
+  'Industrials': '#6b7280',
+  'Consumer Defensive': '#14b8a6',
+  'Energy': '#eab308',
+  'Utilities': '#06b6d4',
+  'Real Estate': '#6366f1',
+  'Basic Materials': '#f59e0b',
+  'Unknown': '#94a3b8'
 };
 
 // ============================================
@@ -389,6 +421,462 @@ const ComparisonChart = ({ selectedStocks, stockData, theme, onClose }) => {
           ))}
         </LineChart>
       </ResponsiveContainer>
+    </div>
+  );
+};
+
+// News Feed Component
+const NewsFeed = ({ symbols, theme, onClose }) => {
+  const [news, setNews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedSymbol, setSelectedSymbol] = useState('all');
+
+  useEffect(() => {
+    const fetchAllNews = async () => {
+      setLoading(true);
+      const allNews = [];
+      for (const symbol of symbols.slice(0, 5)) { // Limit to 5 stocks to avoid rate limits
+        const symbolNews = await fetchCompanyNews(symbol);
+        symbolNews.forEach(item => allNews.push({ ...item, symbol }));
+        await new Promise(r => setTimeout(r, 100));
+      }
+      // Sort by datetime descending
+      allNews.sort((a, b) => b.datetime - a.datetime);
+      setNews(allNews);
+      setLoading(false);
+    };
+    if (symbols.length > 0) fetchAllNews();
+  }, [symbols]);
+
+  const filteredNews = selectedSymbol === 'all'
+    ? news
+    : news.filter(n => n.symbol === selectedSymbol);
+
+  const formatDate = (timestamp) => {
+    const date = new Date(timestamp * 1000);
+    const now = new Date();
+    const diffHours = Math.floor((now - date) / (1000 * 60 * 60));
+    if (diffHours < 1) return 'Just now';
+    if (diffHours < 24) return `${diffHours}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  return (
+    <div className={`rounded-xl p-4 mb-6 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className={`font-semibold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+          <Newspaper className="w-5 h-5" /> Market News
+        </h3>
+        <div className="flex items-center gap-2">
+          <select
+            value={selectedSymbol}
+            onChange={(e) => setSelectedSymbol(e.target.value)}
+            className={`px-2 py-1 text-sm rounded ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+          >
+            <option value="all">All Stocks</option>
+            {symbols.slice(0, 5).map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+          <button onClick={onClose} className={`p-1 rounded ${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="flex items-center justify-center py-8">
+          <RefreshCw className="w-6 h-6 animate-spin text-blue-500" />
+        </div>
+      ) : filteredNews.length === 0 ? (
+        <div className={`text-center py-8 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+          No news available
+        </div>
+      ) : (
+        <div className="space-y-3 max-h-96 overflow-y-auto">
+          {filteredNews.slice(0, 20).map((item, idx) => (
+            <a
+              key={idx}
+              href={item.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={`block p-3 rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-700/50 hover:bg-slate-700' : 'bg-slate-50 hover:bg-slate-100'}`}
+            >
+              <div className="flex items-start gap-3">
+                {item.image && (
+                  <img src={item.image} alt="" className="w-16 h-16 object-cover rounded" onError={(e) => e.target.style.display = 'none'} />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="px-1.5 py-0.5 bg-blue-500/20 text-blue-400 text-xs rounded font-medium">{item.symbol}</span>
+                    <span className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{item.source}</span>
+                    <span className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{formatDate(item.datetime)}</span>
+                  </div>
+                  <h4 className={`font-medium text-sm line-clamp-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{item.headline}</h4>
+                  <p className={`text-xs mt-1 line-clamp-2 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{item.summary}</p>
+                </div>
+                <ExternalLink className={`w-4 h-4 flex-shrink-0 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`} />
+              </div>
+            </a>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+};
+
+// Sector Allocation Pie Chart
+const SectorAllocation = ({ stockData, positions, currentUser, theme, onClose }) => {
+  const sectorData = useMemo(() => {
+    const userPositions = positions.filter(p => p.username === currentUser);
+    const sectorValues = {};
+
+    userPositions.forEach(pos => {
+      const stock = stockData[pos.symbol];
+      if (stock) {
+        const sector = stock.sector || 'Unknown';
+        const value = stock.price * pos.shares;
+        sectorValues[sector] = (sectorValues[sector] || 0) + value;
+      }
+    });
+
+    // If no positions, use equal weight for all stocks
+    if (Object.keys(sectorValues).length === 0) {
+      Object.values(stockData).forEach(stock => {
+        const sector = stock.sector || 'Unknown';
+        sectorValues[sector] = (sectorValues[sector] || 0) + 1;
+      });
+    }
+
+    return Object.entries(sectorValues)
+      .map(([name, value]) => ({ name, value, color: SECTOR_COLORS[name] || SECTOR_COLORS['Unknown'] }))
+      .sort((a, b) => b.value - a.value);
+  }, [stockData, positions, currentUser]);
+
+  const total = sectorData.reduce((sum, s) => sum + s.value, 0);
+
+  return (
+    <div className={`rounded-xl p-4 mb-6 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className={`font-semibold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+          <PieChartIcon className="w-5 h-5" /> Sector Allocation
+        </h3>
+        <button onClick={onClose} className={`p-1 rounded ${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <div className="flex flex-col md:flex-row items-center gap-4">
+        <ResponsiveContainer width="100%" height={200}>
+          <PieChart>
+            <Pie
+              data={sectorData}
+              cx="50%"
+              cy="50%"
+              innerRadius={50}
+              outerRadius={80}
+              dataKey="value"
+              nameKey="name"
+            >
+              {sectorData.map((entry, index) => (
+                <Cell key={`cell-${index}`} fill={entry.color} />
+              ))}
+            </Pie>
+            <Tooltip
+              contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', border: 'none', borderRadius: '8px' }}
+              formatter={(value, name) => [`${((value / total) * 100).toFixed(1)}%`, name]}
+            />
+          </PieChart>
+        </ResponsiveContainer>
+
+        <div className="flex-1 space-y-2">
+          {sectorData.map((sector, idx) => (
+            <div key={idx} className="flex items-center justify-between text-sm">
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: sector.color }} />
+                <span className={theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}>{sector.name}</span>
+              </div>
+              <span className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                {((sector.value / total) * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// Portfolio Value Over Time Chart
+const PortfolioValueChart = ({ stockData, positions, currentUser, theme, onClose }) => {
+  const [portfolioHistory, setPortfolioHistory] = useState(() => {
+    const saved = localStorage.getItem('portfolio-history');
+    return saved ? JSON.parse(saved) : [];
+  });
+
+  // Calculate current portfolio value
+  const currentValue = useMemo(() => {
+    const userPositions = positions.filter(p => p.username === currentUser);
+    return userPositions.reduce((sum, pos) => {
+      const stock = stockData[pos.symbol];
+      return sum + (stock ? stock.price * pos.shares : 0);
+    }, 0);
+  }, [stockData, positions, currentUser]);
+
+  // Record portfolio value periodically
+  useEffect(() => {
+    if (currentValue > 0) {
+      const today = new Date().toISOString().split('T')[0];
+      setPortfolioHistory(prev => {
+        // Only add one entry per day
+        const filtered = prev.filter(p => p.date !== today);
+        const newHistory = [...filtered, { date: today, value: currentValue }]
+          .sort((a, b) => a.date.localeCompare(b.date))
+          .slice(-90); // Keep last 90 days
+        localStorage.setItem('portfolio-history', JSON.stringify(newHistory));
+        return newHistory;
+      });
+    }
+  }, [currentValue]);
+
+  const chartData = portfolioHistory.length > 1 ? portfolioHistory : [
+    { date: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0], value: currentValue * 0.95 },
+    { date: new Date().toISOString().split('T')[0], value: currentValue }
+  ];
+
+  const isPositive = chartData.length > 1 && chartData[chartData.length - 1].value >= chartData[0].value;
+  const changePercent = chartData.length > 1
+    ? ((chartData[chartData.length - 1].value - chartData[0].value) / chartData[0].value * 100)
+    : 0;
+
+  return (
+    <div className={`rounded-xl p-4 mb-6 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <div className="flex justify-between items-center mb-4">
+        <div>
+          <h3 className={`font-semibold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+            <Wallet className="w-5 h-5" /> Portfolio Value
+          </h3>
+          <div className="flex items-center gap-3 mt-1">
+            <span className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+              ${currentValue.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+            </span>
+            <span className={`text-sm font-medium ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+              {isPositive ? '+' : ''}{changePercent.toFixed(2)}%
+            </span>
+          </div>
+        </div>
+        <button onClick={onClose} className={`p-1 rounded ${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+          <X className="w-5 h-5" />
+        </button>
+      </div>
+
+      <ResponsiveContainer width="100%" height={150}>
+        <AreaChart data={chartData}>
+          <defs>
+            <linearGradient id="portfolioGradient" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0.3} />
+              <stop offset="100%" stopColor={isPositive ? '#22c55e' : '#ef4444'} stopOpacity={0} />
+            </linearGradient>
+          </defs>
+          <XAxis
+            dataKey="date"
+            tick={{ fill: theme === 'dark' ? '#94a3b8' : '#475569', fontSize: 10 }}
+            tickFormatter={(d) => new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}
+            interval="preserveStartEnd"
+          />
+          <YAxis
+            tick={{ fill: theme === 'dark' ? '#94a3b8' : '#475569', fontSize: 10 }}
+            tickFormatter={(v) => `$${(v / 1000).toFixed(0)}k`}
+            domain={['auto', 'auto']}
+          />
+          <Tooltip
+            contentStyle={{ backgroundColor: theme === 'dark' ? '#1e293b' : '#fff', border: 'none', borderRadius: '8px' }}
+            labelFormatter={(label) => new Date(label).toLocaleDateString()}
+            formatter={(value) => [`$${value.toLocaleString(undefined, { minimumFractionDigits: 2 })}`, 'Value']}
+          />
+          <Area type="monotone" dataKey="value" stroke={isPositive ? '#22c55e' : '#ef4444'} fill="url(#portfolioGradient)" strokeWidth={2} />
+        </AreaChart>
+      </ResponsiveContainer>
+    </div>
+  );
+};
+
+// Price Alerts Component
+const PriceAlertManager = ({ stockData, theme, onClose }) => {
+  const [alerts, setAlerts] = useState(() => {
+    const saved = localStorage.getItem('price-alerts');
+    return saved ? JSON.parse(saved) : [];
+  });
+  const [newAlert, setNewAlert] = useState({ symbol: '', targetPrice: '', condition: 'above' });
+  const [triggeredAlerts, setTriggeredAlerts] = useState([]);
+  const notifiedRef = useRef(new Set());
+
+  // Save alerts to localStorage
+  useEffect(() => {
+    localStorage.setItem('price-alerts', JSON.stringify(alerts));
+  }, [alerts]);
+
+  // Check alerts against current prices
+  useEffect(() => {
+    const newTriggered = [];
+    alerts.forEach(alert => {
+      const stock = stockData[alert.symbol];
+      if (!stock) return;
+
+      const isTriggered = alert.condition === 'above'
+        ? stock.price >= alert.targetPrice
+        : stock.price <= alert.targetPrice;
+
+      if (isTriggered && !notifiedRef.current.has(alert.id)) {
+        newTriggered.push(alert);
+        notifiedRef.current.add(alert.id);
+
+        // Browser notification
+        if (Notification.permission === 'granted') {
+          new Notification(`Price Alert: ${alert.symbol}`, {
+            body: `${alert.symbol} is now $${stock.price.toFixed(2)} (target: ${alert.condition} $${alert.targetPrice})`,
+            icon: '📈'
+          });
+        }
+      }
+    });
+
+    if (newTriggered.length > 0) {
+      setTriggeredAlerts(prev => [...newTriggered, ...prev]);
+    }
+  }, [stockData, alerts]);
+
+  const addAlert = () => {
+    if (!newAlert.symbol || !newAlert.targetPrice) return;
+    const alert = {
+      id: Date.now(),
+      symbol: newAlert.symbol.toUpperCase(),
+      targetPrice: parseFloat(newAlert.targetPrice),
+      condition: newAlert.condition,
+      createdAt: new Date().toISOString()
+    };
+    setAlerts(prev => [...prev, alert]);
+    setNewAlert({ symbol: '', targetPrice: '', condition: 'above' });
+  };
+
+  const removeAlert = (id) => {
+    setAlerts(prev => prev.filter(a => a.id !== id));
+    notifiedRef.current.delete(id);
+  };
+
+  const requestNotificationPermission = () => {
+    if ('Notification' in window) {
+      Notification.requestPermission();
+    }
+  };
+
+  const symbols = Object.keys(stockData);
+
+  return (
+    <div className={`rounded-xl p-4 mb-6 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <div className="flex justify-between items-center mb-4">
+        <h3 className={`font-semibold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+          <Bell className="w-5 h-5" /> Price Alerts
+        </h3>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={requestNotificationPermission}
+            className={`text-xs px-2 py-1 rounded ${theme === 'dark' ? 'bg-slate-700 text-slate-300 hover:bg-slate-600' : 'bg-slate-200 text-slate-600 hover:bg-slate-300'}`}
+          >
+            Enable Notifications
+          </button>
+          <button onClick={onClose} className={`p-1 rounded ${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+      </div>
+
+      {/* Triggered Alerts */}
+      {triggeredAlerts.length > 0 && (
+        <div className="mb-4 p-3 bg-green-500/20 rounded-lg">
+          <div className="flex items-center gap-2 text-green-400 font-medium mb-2">
+            <BellRing className="w-4 h-4" /> Triggered Alerts
+          </div>
+          {triggeredAlerts.slice(0, 3).map((alert, idx) => (
+            <div key={idx} className="text-sm text-green-300">
+              {alert.symbol} hit ${alert.targetPrice} ({alert.condition})
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Add New Alert */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        <select
+          value={newAlert.symbol}
+          onChange={(e) => setNewAlert(prev => ({ ...prev, symbol: e.target.value }))}
+          className={`px-3 py-2 rounded-lg text-sm ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+        >
+          <option value="">Select stock</option>
+          {symbols.map(s => (
+            <option key={s} value={s}>{s} (${stockData[s]?.price?.toFixed(2)})</option>
+          ))}
+        </select>
+        <select
+          value={newAlert.condition}
+          onChange={(e) => setNewAlert(prev => ({ ...prev, condition: e.target.value }))}
+          className={`px-3 py-2 rounded-lg text-sm ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+        >
+          <option value="above">Above</option>
+          <option value="below">Below</option>
+        </select>
+        <input
+          type="number"
+          value={newAlert.targetPrice}
+          onChange={(e) => setNewAlert(prev => ({ ...prev, targetPrice: e.target.value }))}
+          placeholder="Target price"
+          className={`px-3 py-2 rounded-lg text-sm w-32 ${theme === 'dark' ? 'bg-slate-700 text-white placeholder-slate-400' : 'bg-slate-100 text-slate-800'}`}
+        />
+        <button
+          onClick={addAlert}
+          disabled={!newAlert.symbol || !newAlert.targetPrice}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white rounded-lg text-sm flex items-center gap-1"
+        >
+          <Plus className="w-4 h-4" /> Add Alert
+        </button>
+      </div>
+
+      {/* Active Alerts */}
+      <div className="space-y-2 max-h-48 overflow-y-auto">
+        {alerts.length === 0 ? (
+          <div className={`text-center py-4 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+            No active alerts
+          </div>
+        ) : (
+          alerts.map(alert => {
+            const stock = stockData[alert.symbol];
+            const currentPrice = stock?.price || 0;
+            const diff = alert.condition === 'above'
+              ? alert.targetPrice - currentPrice
+              : currentPrice - alert.targetPrice;
+            const diffPercent = currentPrice ? (diff / currentPrice * 100) : 0;
+
+            return (
+              <div key={alert.id} className={`flex items-center justify-between p-3 rounded-lg ${theme === 'dark' ? 'bg-slate-700/50' : 'bg-slate-50'}`}>
+                <div className="flex items-center gap-3">
+                  <span className={`font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{alert.symbol}</span>
+                  <span className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                    {alert.condition === 'above' ? '↑' : '↓'} ${alert.targetPrice.toFixed(2)}
+                  </span>
+                  {stock && (
+                    <span className={`text-xs ${diff <= 0 ? 'text-green-400' : 'text-slate-400'}`}>
+                      {diff <= 0 ? 'Triggered!' : `${diffPercent.toFixed(1)}% away`}
+                    </span>
+                  )}
+                </div>
+                <button onClick={() => removeAlert(alert.id)} className="text-red-400 hover:text-red-300">
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              </div>
+            );
+          })
+        )}
+      </div>
     </div>
   );
 };
@@ -968,25 +1456,38 @@ const StockCard = ({
   const myStance = stances.find(s => s.symbol === stock.symbol && s.username === currentUser)?.stance;
 
   return (
-    <div className={`rounded-xl shadow-lg overflow-hidden hover:shadow-xl transition-all ${isLoading ? 'opacity-60' : ''} ${theme === 'dark' ? 'bg-slate-800' : 'bg-white'} ${comparisonMode && isSelectedForComparison ? 'ring-2 ring-purple-500' : ''}`}>
+    <div
+      className={`rounded-2xl overflow-hidden transition-all ${isLoading ? 'opacity-60' : ''}`}
+      style={{
+        background: 'rgba(255,255,255,0.9)',
+        backdropFilter: 'blur(20px)',
+        WebkitBackdropFilter: 'blur(20px)',
+        border: comparisonMode && isSelectedForComparison ? '2px solid #AF52DE' : '1px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+      }}
+    >
       <div className="p-5">
-        <div className="flex justify-between items-start mb-2">
+        <div className="flex justify-between items-start mb-3">
           <div className="flex items-start gap-3">
             {comparisonMode && (
               <button
                 onClick={() => onToggleComparison(stock.symbol)}
-                className={`w-6 h-6 rounded border-2 flex items-center justify-center mt-1 ${isSelectedForComparison ? 'bg-purple-600 border-purple-600' : theme === 'dark' ? 'border-slate-500 hover:border-purple-500' : 'border-slate-300 hover:border-purple-500'}`}
+                className="w-6 h-6 rounded-lg flex items-center justify-center mt-1 transition-all"
+                style={{
+                  background: isSelectedForComparison ? 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)' : 'rgba(60,60,67,0.12)',
+                  border: isSelectedForComparison ? 'none' : '1.5px solid rgba(118,118,128,0.2)'
+                }}
               >
                 {isSelectedForComparison && <Check className="w-4 h-4 text-white" />}
               </button>
             )}
             <div>
               <div className="flex items-center gap-2 mb-1">
-                <h2 className={`text-2xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{stock.symbol}</h2>
+                <h2 className="text-2xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{stock.symbol}</h2>
                 <VoteButtons symbol={stock.symbol} votes={votes} currentUser={currentUser} onVote={onVote} />
               </div>
-              <div className={`text-sm mb-2 line-clamp-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>{stock.shortName}</div>
-              <div className="flex flex-wrap gap-1 items-center">
+              <div className="text-sm mb-2 line-clamp-1 text-slate-500">{stock.shortName}</div>
+              <div className="flex flex-wrap gap-1.5 items-center">
                 <SectorBadge sector={stock.sector} />
                 {myStance && <StanceBadge stance={myStance} />}
               </div>
@@ -994,12 +1495,12 @@ const StockCard = ({
           </div>
           <div className="flex flex-col items-end gap-1">
             {canDelete && !comparisonMode && (
-              <button onClick={() => onRemove(stock.symbol)} className={`${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'} hover:text-red-400 transition-colors p-1`}>
-                <X className="w-5 h-5" />
+              <button onClick={() => onRemove(stock.symbol)} className="text-slate-400 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-50">
+                <X className="w-4 h-4" />
               </button>
             )}
             {addedBy && (
-              <div className={`flex items-center gap-1 text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+              <div className="flex items-center gap-1 text-xs text-slate-400">
                 <UserAvatar username={addedBy} size="sm" />
                 <span>{addedBy}</span>
               </div>
@@ -1007,12 +1508,14 @@ const StockCard = ({
           </div>
         </div>
 
-        <div className="mb-3">
-          <div className={`text-3xl font-bold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{formatCurrency(stock.price)}</div>
-          <div className={`flex items-center gap-2 text-lg font-semibold ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-            {isPositive ? <TrendingUp className="w-5 h-5" /> : <TrendingDown className="w-5 h-5" />}
-            <span>{isPositive ? '+' : ''}{formatCurrency(stock.change)}</span>
-            <span>({isPositive ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%)</span>
+        <div className="mb-4">
+          <div className="text-3xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(stock.price)}</div>
+          <div className={`flex items-center gap-2 mt-1 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+            {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+            <span className="font-medium">{isPositive ? '+' : ''}{formatCurrency(stock.change)}</span>
+            <span className="px-2 py-0.5 rounded-full text-sm font-medium" style={{ background: isPositive ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)' }}>
+              {isPositive ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
+            </span>
           </div>
         </div>
 
@@ -1146,7 +1649,13 @@ const StockDashboard = () => {
   // Social feed state
   const [feedItems, setFeedItems] = useState([]);
   const [showFeed, setShowFeed] = useState(false);
-  
+
+  // New feature panel states
+  const [showNewsFeed, setShowNewsFeed] = useState(false);
+  const [showSectorAllocation, setShowSectorAllocation] = useState(false);
+  const [showPortfolioValue, setShowPortfolioValue] = useState(false);
+  const [showPriceAlerts, setShowPriceAlerts] = useState(false);
+
   const allUsers = useMemo(() => {
     const users = new Set();
     if (currentUser) users.add(currentUser);
@@ -1476,12 +1985,16 @@ const StockDashboard = () => {
   const addStock = async () => {
     const symbol = newSymbol.toUpperCase().trim();
     if (!symbol || symbols.includes(symbol) || symbol.length > 5) return;
-    
+
     setSymbols(prev => [...prev, symbol]);
     setNewSymbol('');
     setLoadingSymbols(prev => new Set([...prev, symbol]));
-    
-    await supabase.from('stock_meta').insert([{ watchlist_id: watchlistId, symbol, added_by: currentUser }]).catch(() => {});
+
+    try {
+      await supabase.from('stock_meta').insert([{ watchlist_id: watchlistId, symbol, added_by: currentUser }]);
+    } catch (e) {
+      console.log('Error adding stock meta:', e);
+    }
     setStockMeta(prev => ({ ...prev, [symbol]: { added_by: currentUser } }));
 
     // Add to social feed
@@ -1581,47 +2094,42 @@ const StockDashboard = () => {
   if (showUserSetup) return <UserSetupModal onSetUser={handleSetUser} />;
 
   return (
-    <div className={`min-h-screen p-4 md:p-6 ${theme === 'dark' ? 'bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900' : 'bg-gradient-to-br from-slate-100 via-white to-slate-100'}`}>
+    <div className="min-h-screen p-4 md:p-6" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
       <div className="max-w-7xl mx-auto">
         {/* Header */}
-        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8 gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className="text-3xl md:text-4xl font-bold text-white">📈 Stock Watchlist</h1>
-              <span className={`flex items-center gap-1 text-sm px-2 py-1 rounded-full ${isConnected ? 'text-green-400 bg-green-900/30' : 'text-yellow-400 bg-yellow-900/30'}`}>
-                {isConnected ? <Wifi className="w-4 h-4" /> : <WifiOff className="w-4 h-4" />}
+              <h1 className="text-3xl md:text-4xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>Stock Watchlist</h1>
+              <span className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full font-medium ${isConnected ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
+                <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`} style={{ boxShadow: isConnected ? '0 0 8px rgba(52,199,89,0.5)' : 'none' }}></span>
                 {isConnected ? 'Live' : 'Offline'}
               </span>
             </div>
-            <p className="text-slate-400">{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
+            <p className="text-slate-500">{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
           </div>
-          
-          <div className="flex items-center gap-3">
-            <button
-              onClick={toggleTheme}
-              className={`p-2 rounded-lg transition-colors ${theme === 'dark' ? 'bg-slate-800 text-yellow-400 hover:bg-slate-700' : 'bg-slate-200 text-slate-700 hover:bg-slate-300'}`}
-              title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}
-            >
-              {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-            </button>
-            <div className={`flex items-center gap-2 px-3 py-2 rounded-lg ${theme === 'dark' ? 'bg-slate-800' : 'bg-slate-200'}`}>
+
+          <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-xl" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
               <UserAvatar username={currentUser} size="sm" />
-              <span className={`font-medium ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{currentUser}</span>
-              <button onClick={() => setShowUserSetup(true)} className={`${theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-500 hover:text-slate-800'}`}>
+              <span className="font-medium text-slate-800">{currentUser}</span>
+              <button onClick={() => setShowUserSetup(true)} className="text-slate-400 hover:text-blue-500 transition-colors ml-1">
                 <Edit3 className="w-4 h-4" />
               </button>
             </div>
             <button onClick={() => setShowFeed(!showFeed)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${showFeed ? 'bg-purple-600 hover:bg-purple-700 text-white' : theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600 text-white' : 'bg-slate-200 hover:bg-slate-300 text-slate-800'}`}>
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${showFeed ? 'text-white shadow-lg' : 'text-slate-600 hover:text-blue-500'}`}
+              style={showFeed ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 15px rgba(175,82,222,0.3)' } : { background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
               <Activity className="w-4 h-4" /> Feed
               {feedItems.length > 0 && (
-                <span className={`text-xs px-1.5 py-0.5 rounded-full ${showFeed ? 'bg-white/20' : 'bg-purple-500 text-white'}`}>
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${showFeed ? 'bg-white/20 text-white' : 'bg-purple-500 text-white'}`}>
                   {feedItems.length}
                 </span>
               )}
             </button>
             <button onClick={() => setShowShareModal(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+              className="flex items-center gap-2 px-5 py-2 text-white rounded-xl font-medium transition-all hover:shadow-lg"
+              style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' }}>
               <Share2 className="w-4 h-4" /> Share
             </button>
           </div>
@@ -1655,26 +2163,26 @@ const StockDashboard = () => {
 
         {/* Summary */}
         {summary && (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-6">
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-sm">Stocks</div>
-              <div className="text-2xl font-bold text-white">{summary.total}</div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <div className="text-slate-500 text-sm font-medium mb-1">Stocks</div>
+              <div className="text-3xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{summary.total}</div>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-sm">Today</div>
-              <div className={`text-2xl font-bold ${summary.avgChange >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <div className="text-slate-500 text-sm font-medium mb-1">Today</div>
+              <div className={`text-3xl font-semibold ${summary.avgChange >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ letterSpacing: '-0.02em' }}>
                 {summary.avgChange >= 0 ? '+' : ''}{summary.avgChange.toFixed(2)}%
               </div>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-sm">YTD</div>
-              <div className={`text-2xl font-bold ${summary.avgYTD >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <div className="text-slate-500 text-sm font-medium mb-1">YTD</div>
+              <div className={`text-3xl font-semibold ${summary.avgYTD >= 0 ? 'text-green-400' : 'text-red-400'}`} style={{ letterSpacing: '-0.02em' }}>
                 {summary.avgYTD >= 0 ? '+' : ''}{summary.avgYTD.toFixed(2)}%
               </div>
             </div>
-            <div className="bg-slate-800 rounded-xl p-4">
-              <div className="text-slate-400 text-sm">Users</div>
-              <div className="text-2xl font-bold text-white flex items-center gap-2">
+            <div className="rounded-2xl p-5" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
+              <div className="text-slate-500 text-sm font-medium mb-1">Users</div>
+              <div className="text-3xl font-semibold text-slate-800 flex items-center gap-2" style={{ letterSpacing: '-0.02em' }}>
                 {allUsers.length}
                 <div className="flex -space-x-1">
                   {allUsers.slice(0, 3).map(u => <UserAvatar key={u} username={u} size="sm" />)}
@@ -1685,60 +2193,94 @@ const StockDashboard = () => {
         )}
 
         {/* Controls */}
-        <div className="bg-slate-800 rounded-xl p-4 mb-6">
+        <div className="rounded-2xl p-5 mb-6" style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)', boxShadow: '0 4px 20px rgba(0,0,0,0.06)' }}>
           <div className="flex flex-col md:flex-row gap-3">
             <div className="flex gap-2 flex-1">
               <input type="text" value={newSymbol} onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
                 onKeyPress={(e) => e.key === 'Enter' && addStock()}
                 placeholder="Add ticker (e.g., AAPL)"
-                className="flex-1 px-4 py-2 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                className="flex-1 px-4 py-3 text-slate-800 rounded-xl focus:outline-none transition-all"
+                style={{ background: 'rgba(60,60,67,0.12)', border: '1px solid transparent' }}
+                onFocus={(e) => { e.target.style.background = 'white'; e.target.style.borderColor = '#007AFF'; e.target.style.boxShadow = '0 0 0 3px rgba(0,122,255,0.15)'; }}
+                onBlur={(e) => { e.target.style.background = 'rgba(60,60,67,0.12)'; e.target.style.borderColor = 'transparent'; e.target.style.boxShadow = 'none'; }}
                 maxLength={5} />
               <button onClick={addStock} disabled={!newSymbol.trim()}
-                className="px-4 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white rounded-lg transition-colors flex items-center gap-2">
+                className="px-5 py-3 text-white rounded-xl font-medium transition-all flex items-center gap-2 disabled:opacity-50"
+                style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)', boxShadow: '0 4px 12px rgba(52,199,89,0.3)' }}>
                 <Plus className="w-4 h-4" /> Add
               </button>
             </div>
-            
-            <div className="flex gap-2">
+
+            <div className="flex gap-2 flex-wrap">
               {/* View mode toggle */}
-              <div className="flex bg-slate-700 rounded-lg p-1">
+              <div className="flex rounded-xl p-1" style={{ background: 'rgba(60,60,67,0.12)' }}>
                 <button onClick={() => setViewMode('grid')}
-                  className={`px-3 py-1 rounded text-sm ${viewMode === 'grid' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'grid' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button onClick={() => setViewMode('compact')}
-                  className={`px-3 py-1 rounded text-sm ${viewMode === 'compact' ? 'bg-blue-600 text-white' : 'text-slate-400 hover:text-white'}`}>
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'compact' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <List className="w-4 h-4" />
                 </button>
               </div>
-              
+
               {/* Comparison mode toggle */}
               <button onClick={toggleComparisonMode}
-                className={`px-3 py-2 rounded-lg flex items-center gap-2 ${comparisonMode ? 'bg-purple-600 text-white' : theme === 'dark' ? 'bg-slate-700 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-800'}`}>
+                className={`px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-all ${comparisonMode ? 'text-white' : 'text-slate-600 hover:text-purple-500'}`}
+                style={comparisonMode ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 12px rgba(175,82,222,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
                 <BarChart2 className="w-4 h-4" />
                 {comparisonMode ? `Compare (${selectedForComparison.length})` : 'Compare'}
               </button>
 
               {/* Filter toggle */}
               <button onClick={() => setShowFilters(!showFilters)}
-                className={`px-3 py-2 rounded-lg flex items-center gap-2 ${showFilters ? 'bg-blue-600 text-white' : theme === 'dark' ? 'bg-slate-700 text-slate-400 hover:text-white' : 'bg-slate-200 text-slate-600 hover:text-slate-800'}`}>
+                className={`px-3 py-2 rounded-xl flex items-center gap-2 transition-all ${showFilters ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showFilters ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
                 <Filter className="w-4 h-4" />
               </button>
-              
+
+              {/* Feature toggles */}
+              <button onClick={() => setShowNewsFeed(!showNewsFeed)}
+                className={`px-3 py-2 rounded-xl transition-all ${showNewsFeed ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showNewsFeed ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="News Feed">
+                <Newspaper className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowSectorAllocation(!showSectorAllocation)}
+                className={`px-3 py-2 rounded-xl transition-all ${showSectorAllocation ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showSectorAllocation ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Sector Allocation">
+                <PieChartIcon className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowPortfolioValue(!showPortfolioValue)}
+                className={`px-3 py-2 rounded-xl transition-all ${showPortfolioValue ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showPortfolioValue ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Portfolio Value">
+                <Wallet className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowPriceAlerts(!showPriceAlerts)}
+                className={`px-3 py-2 rounded-xl transition-all ${showPriceAlerts ? 'text-white' : 'text-slate-600 hover:text-orange-500'}`}
+                style={showPriceAlerts ? { background: 'linear-gradient(180deg, #FF9F0A 0%, #FF9500 100%)', boxShadow: '0 4px 12px rgba(255,149,0,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Price Alerts">
+                <Bell className="w-4 h-4" />
+              </button>
+
               <button onClick={fetchAllData} disabled={loading}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white rounded-lg transition-colors flex items-center gap-2">
+                className="px-5 py-2 text-white rounded-xl font-medium transition-all flex items-center gap-2 disabled:opacity-50"
+                style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' }}>
                 <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} /> Refresh
               </button>
             </div>
           </div>
-          
+
           {/* Filter options */}
           {showFilters && (
-            <div className="flex flex-wrap gap-3 mt-4 pt-4 border-t border-slate-700">
+            <div className="flex flex-wrap gap-3 mt-4 pt-4" style={{ borderTop: '1px solid rgba(0,0,0,0.06)' }}>
               <div className="flex items-center gap-2">
-                <span className="text-slate-400 text-sm">Sort:</span>
+                <span className="text-slate-500 text-sm font-medium">Sort:</span>
                 <select value={sortBy} onChange={(e) => setSortBy(e.target.value)}
-                  className="px-3 py-1 bg-slate-700 text-white text-sm rounded-lg focus:outline-none">
+                  className="px-3 py-2 text-slate-800 text-sm rounded-lg focus:outline-none"
+                  style={{ background: 'rgba(60,60,67,0.12)' }}>
                   <option value="symbol">Symbol</option>
                   <option value="holders">Most Holders</option>
                   <option value="change">Day Change</option>
@@ -1773,6 +2315,46 @@ const StockDashboard = () => {
               setComparisonMode(false);
               setSelectedForComparison([]);
             }}
+          />
+        )}
+
+        {/* News Feed */}
+        {showNewsFeed && (
+          <NewsFeed
+            symbols={symbols}
+            theme={theme}
+            onClose={() => setShowNewsFeed(false)}
+          />
+        )}
+
+        {/* Sector Allocation */}
+        {showSectorAllocation && (
+          <SectorAllocation
+            stockData={stockData}
+            positions={positions}
+            currentUser={currentUser}
+            theme={theme}
+            onClose={() => setShowSectorAllocation(false)}
+          />
+        )}
+
+        {/* Portfolio Value Chart */}
+        {showPortfolioValue && (
+          <PortfolioValueChart
+            stockData={stockData}
+            positions={positions}
+            currentUser={currentUser}
+            theme={theme}
+            onClose={() => setShowPortfolioValue(false)}
+          />
+        )}
+
+        {/* Price Alerts */}
+        {showPriceAlerts && (
+          <PriceAlertManager
+            stockData={stockData}
+            theme={theme}
+            onClose={() => setShowPriceAlerts(false)}
           />
         )}
 
