@@ -2393,6 +2393,7 @@ const StockDashboard = () => {
   const [notes, setNotes] = useState([]);
   const [positions, setPositions] = useState([]); // Private - only user's own via RLS
   const [stances, setStances] = useState([]);
+  const [votes, setVotes] = useState([]); // Voting feature (stub for now)
   const [members, setMembers] = useState([]); // All watchlist members for display name lookup
 
   // Member lookup map: user_id -> display_name
@@ -2670,6 +2671,12 @@ const StockDashboard = () => {
     } else if (stance && stance !== 'neutral') {
       await supabase.from('stances').insert([{ watchlist_id: watchlist.id, symbol, stance, user_id: user.id }]);
     }
+  };
+
+  // Voting handler (stub - voting feature not yet implemented in DB)
+  const handleVote = async (symbol, voteType) => {
+    // TODO: Implement voting when votes table is added to Supabase
+    console.log('Vote feature not yet implemented:', symbol, voteType);
   };
 
   // Fetch stock data
