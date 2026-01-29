@@ -1,17 +1,22 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
 import { TrendingUp, TrendingDown, Plus, X, RefreshCw, Star, ChevronDown, ChevronUp, AlertCircle, MessageSquare, Send, Trash2, Users, Wifi, WifiOff, DollarSign, Target, ThumbsUp, ThumbsDown, Share2, Copy, Check, Edit3, Minus, LayoutGrid, List, Filter, Sun, Moon, BarChart2, Activity, Bell, BellRing, Newspaper, PieChart as PieChartIcon, Wallet, ExternalLink, Lock, LogIn, UserPlus, Home } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
+
+// Auth & utilities
+import { useAuth, supabase } from './contexts/AuthContext';
+import AuthModal from './components/AuthModal';
+import storage, { PREF_KEYS } from './utils/storage';
+import watchlistUtils from './utils/watchlist';
 
 // ============================================
-// 🔑 CONFIGURATION
+// 🔑 CONFIGURATION (from environment variables)
 // ============================================
-const SUPABASE_URL = 'https://adthubbgdaaaamjlkmqm.supabase.co';
-const SUPABASE_ANON_KEY = 'sb_publishable_G7Svv6sASbxC4xMK_DgtMQ_LCbmQNc2';
-const FINNHUB_API_KEY = 'd5rs899r01qj5oilqq60d5rs899r01qj5oilqq6g';
-// ============================================
+const FINNHUB_API_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
 
-const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+if (!FINNHUB_API_KEY) {
+  console.warn('Missing REACT_APP_FINNHUB_API_KEY environment variable');
+}
+// ============================================
 
 // User colors
 const USER_COLORS = [
@@ -1365,9 +1370,9 @@ const SocialFeed = ({ feedItems, currentUser, theme, onClose }) => {
   );
 };
 
-const ShareModal = ({ watchlistId, onClose }) => {
+const ShareModal = ({ watchlistSlug, onClose }) => {
   const [copied, setCopied] = useState(false);
-  const shareUrl = `${window.location.origin}${window.location.pathname}?watchlist=${watchlistId}`;
+  const shareUrl = `${window.location.origin}${window.location.pathname}?watchlist=${watchlistSlug}`;
   
   const handleCopy = () => {
     navigator.clipboard.writeText(shareUrl);
@@ -1400,129 +1405,94 @@ const ShareModal = ({ watchlistId, onClose }) => {
   );
 };
 
-const WelcomeModal = ({ onComplete }) => {
-  const [step, setStep] = useState(0);
-  const [name, setName] = useState('');
+// Join Watchlist Modal - shown when user is authenticated but not a member
+const JoinWatchlistModal = ({ watchlist, user, profile, onJoin, onCancel }) => {
+  const [displayName, setDisplayName] = useState(profile?.display_name || profile?.username || user?.email?.split('@')[0] || '');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
 
-  const steps = [
-    {
-      title: 'Welcome to Stock Watchlist!',
-      icon: '👋',
-      description: 'Track your favorite stocks, compete with friends, and make smarter investment decisions together.',
-    },
-    {
-      title: 'Track Your Performance',
-      icon: '📈',
-      description: 'Add positions with your buy price to track P/L. See how you rank against other investors on the leaderboard.',
-    },
-    {
-      title: 'Collaborate & Share',
-      icon: '🤝',
-      description: 'Share your watchlist with friends, leave notes on stocks, and see what others are bullish or bearish on.',
-    },
-  ];
-
-  const handleNext = () => {
-    if (step < 2) {
-      setStep(step + 1);
-    }
-  };
-
-  const handleSubmit = (e) => {
+  const handleJoin = async (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      localStorage.setItem('has-seen-welcome', 'true');
-      onComplete(name.trim());
+    if (!displayName.trim()) {
+      setError('Please enter a display name');
+      return;
+    }
+
+    setLoading(true);
+    setError('');
+
+    try {
+      const { error: joinError } = await supabase
+        .from('watchlist_members')
+        .insert([{
+          watchlist_id: watchlist.id,
+          user_id: user.id,
+          display_name: displayName.trim()
+        }]);
+
+      if (joinError) {
+        setError(joinError.message);
+      } else {
+        onJoin({ watchlist_id: watchlist.id, user_id: user.id, display_name: displayName.trim() });
+      }
+    } catch (err) {
+      setError(err.message || 'Failed to join watchlist');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white rounded-2xl p-8 max-w-md w-full mx-4 shadow-2xl">
-        {step < 3 ? (
-          <>
-            {/* Progress dots */}
-            <div className="flex justify-center gap-2 mb-6">
-              {[0, 1, 2].map(i => (
-                <div
-                  key={i}
-                  className={`w-2 h-2 rounded-full transition-all ${i === step ? 'w-6 bg-blue-500' : i < step ? 'bg-blue-500' : 'bg-slate-300'}`}
-                />
-              ))}
+    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-2xl p-8 max-w-md w-full shadow-2xl">
+        <div className="text-center mb-6">
+          <span className="text-5xl mb-4 block">🐂</span>
+          <h2 className="text-2xl font-bold text-slate-800">Join {watchlist?.name || 'Watchlist'}</h2>
+          <p className="text-slate-500 text-sm mt-1">
+            Choose a display name for this watchlist's leaderboard
+          </p>
+        </div>
+
+        <form onSubmit={handleJoin} className="space-y-4">
+          <div>
+            <label className="block text-sm font-medium text-slate-700 mb-1">
+              Display Name
+            </label>
+            <input
+              type="text"
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="Your name on this leaderboard"
+              className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus
+            />
+          </div>
+
+          {error && (
+            <div className="flex items-center gap-2 p-3 bg-red-50 text-red-600 rounded-lg text-sm">
+              <AlertCircle className="w-4 h-4 flex-shrink-0" />
+              {error}
             </div>
+          )}
 
-            <div className="text-center mb-6">
-              <div className="text-5xl mb-4">{steps[step].icon}</div>
-              <h2 className="text-2xl font-bold text-slate-800 mb-2">{steps[step].title}</h2>
-              <p className="text-slate-500">{steps[step].description}</p>
-            </div>
-
-            {step === 2 ? (
-              <form onSubmit={handleSubmit}>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-                  autoFocus
-                />
-                <button
-                  type="submit"
-                  disabled={!name.trim()}
-                  className="w-full py-3 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
-                  style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
-                >
-                  Get Started
-                </button>
-              </form>
-            ) : (
-              <button
-                onClick={handleNext}
-                className="w-full py-3 text-white font-semibold rounded-xl transition-all"
-                style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
-              >
-                Next
-              </button>
-            )}
-
-            {step < 2 && (
-              <button
-                onClick={() => setStep(2)}
-                className="w-full py-2 text-slate-500 text-sm mt-2 hover:text-slate-700"
-              >
-                Skip
-              </button>
-            )}
-          </>
-        ) : null}
-      </div>
-    </div>
-  );
-};
-
-const UserSetupModal = ({ onSetUser }) => {
-  const [name, setName] = useState('');
-
-  const handleSubmit = (e) => {
-    e.preventDefault();
-    if (name.trim()) onSetUser(name.trim());
-  };
-
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold text-white mb-2">👋 Welcome!</h2>
-        <p className="text-slate-400 text-sm mb-4">Enter your name to start tracking stocks with friends.</p>
-        <form onSubmit={handleSubmit}>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-            autoFocus />
-          <button type="submit" disabled={!name.trim()}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-semibold rounded-lg transition-colors">
-            Get Started
+          <button
+            type="submit"
+            disabled={loading || !displayName.trim()}
+            className="w-full py-3 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
+            style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
+          >
+            {loading ? 'Joining...' : 'Join Watchlist'}
           </button>
+
+          {onCancel && (
+            <button
+              type="button"
+              onClick={onCancel}
+              className="w-full py-2 text-slate-500 hover:text-slate-700 text-sm"
+            >
+              Cancel
+            </button>
+          )}
         </form>
       </div>
     </div>
@@ -1530,7 +1500,7 @@ const UserSetupModal = ({ onSetUser }) => {
 };
 
 // User Dropdown Menu
-const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSector, onShowPortfolio, toggleTheme }) => {
+const UserDropdown = ({ currentUser, theme, onSignOut, toggleTheme }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -1545,9 +1515,6 @@ const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSecto
   }, []);
 
   const menuItems = [
-    { icon: Bell, label: 'Price Alerts', onClick: () => { onShowAlerts(); setIsOpen(false); } },
-    { icon: PieChartIcon, label: 'Sector Allocation', onClick: () => { onShowSector(); setIsOpen(false); } },
-    { icon: Wallet, label: 'Portfolio Value', onClick: () => { onShowPortfolio(); setIsOpen(false); } },
     { icon: theme === 'dark' ? Sun : Moon, label: theme === 'dark' ? 'Light Mode' : 'Dark Mode', onClick: () => { toggleTheme(); setIsOpen(false); } },
     { divider: true },
     { icon: X, label: 'Sign Out', onClick: () => { onSignOut(); setIsOpen(false); }, danger: true },
@@ -2305,27 +2272,98 @@ const StockCard = ({
 // ============================================
 
 const StockDashboard = () => {
-  const [watchlistId] = useState(() => {
-    const params = new URLSearchParams(window.location.search);
-    return params.get('watchlist') || localStorage.getItem('watchlist-id') || generateWatchlistId();
+  // Auth context
+  const { user, profile, loading: authLoading, signOut } = useAuth();
+  const [showAuthModal, setShowAuthModal] = useState(false);
+
+  // Watchlist slug (isolated for mobile deep links)
+  const [watchlistSlug] = useState(() => {
+    const urlSearch = typeof window !== 'undefined' ? window.location.search : '';
+    return watchlistUtils.parse({ urlSearch });
   });
 
-  const [currentUser, setCurrentUser] = useState(() => localStorage.getItem('stock-username') || '');
-  const [showUserSetup, setShowUserSetup] = useState(!currentUser);
-  const [showWelcome, setShowWelcome] = useState(() => !localStorage.getItem('has-seen-welcome') && !currentUser);
+  // Watchlist and membership state
+  const [watchlist, setWatchlist] = useState(null); // { id, code, name, created_by }
+  const [membership, setMembership] = useState(null); // { id, watchlist_id, user_id, display_name }
+  const [membershipLoading, setMembershipLoading] = useState(true);
+  const [showJoinModal, setShowJoinModal] = useState(false);
+
+  // Update browser URL with slug
+  useEffect(() => {
+    watchlistUtils.updateUrl(watchlistSlug);
+  }, [watchlistSlug]);
+
+  // Fetch watchlist and membership when user is authenticated
+  useEffect(() => {
+    if (!user) {
+      setMembershipLoading(false);
+      return;
+    }
+
+    const fetchMembership = async () => {
+      setMembershipLoading(true);
+      try {
+        // First, get the watchlist by code/slug
+        const { data: watchlistData, error: watchlistError } = await supabase
+          .from('watchlists')
+          .select('id, code, name, created_by')
+          .eq('code', watchlistSlug)
+          .single();
+
+        if (watchlistError || !watchlistData) {
+          // Watchlist doesn't exist - will need to create or show error
+          console.log('Watchlist not found:', watchlistSlug);
+          setWatchlist(null);
+          setMembership(null);
+          setMembershipLoading(false);
+          return;
+        }
+
+        setWatchlist(watchlistData);
+
+        // Now check if user is a member
+        const { data: memberData, error: memberError } = await supabase
+          .from('watchlist_members')
+          .select('id, watchlist_id, user_id, display_name, joined_at')
+          .eq('watchlist_id', watchlistData.id)
+          .eq('user_id', user.id)
+          .single();
+
+        if (memberError || !memberData) {
+          // User is not a member - show join modal
+          console.log('User not a member of watchlist');
+          setMembership(null);
+          setShowJoinModal(true);
+        } else {
+          setMembership(memberData);
+        }
+      } catch (err) {
+        console.error('Error fetching membership:', err);
+      } finally {
+        setMembershipLoading(false);
+      }
+    };
+
+    fetchMembership();
+  }, [user, watchlistSlug]);
+
+  // Current user display name from membership (not profile)
+  const currentUser = membership?.display_name || profile?.display_name || profile?.username || user?.email?.split('@')[0] || '';
+
+  // UI state (persisted via storage utility, NOT identity)
   const [showShareModal, setShowShareModal] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
 
-  // Theme state
-  const [theme, setTheme] = useState(() => localStorage.getItem('stock-theme') || 'dark');
+  // Theme state (UI pref only)
+  const [theme, setTheme] = useState(() => storage.get(PREF_KEYS.THEME, 'light'));
 
   // Tab state - default to leaderboard
   const [activeTab, setActiveTab] = useState('leaderboard');
 
-  const [symbols, setSymbols] = useState(() => {
-    const saved = localStorage.getItem(`watchlist-${watchlistId}-symbols`);
-    return saved ? JSON.parse(saved) : ['AAPL', 'MSFT', 'GOOGL'];
-  });
+  // View mode (UI pref only)
+  const [viewMode, setViewMode] = useState(() => storage.get(PREF_KEYS.VIEW_MODE, 'grid'));
+
+  const [symbols, setSymbols] = useState(['AAPL', 'MSFT', 'GOOGL']);
   const [stockData, setStockData] = useState({});
   const [stockMeta, setStockMeta] = useState({});
   const [newSymbol, setNewSymbol] = useState('');
@@ -2336,9 +2374,8 @@ const StockDashboard = () => {
   const [lastUpdate, setLastUpdate] = useState(null);
   const [isConnected, setIsConnected] = useState(false);
 
-  // View and filter state
-  const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'compact'
-  const [sortBy, setSortBy] = useState('symbol'); // 'symbol' | 'holders' | 'change' | 'sector'
+  // Filter state (UI prefs)
+  const [sortBy, setSortBy] = useState(() => storage.get(PREF_KEYS.SORT_BY, 'symbol'));
   const [filterSector, setFilterSector] = useState('all');
   const [showFilters, setShowFilters] = useState(false);
 
@@ -2347,9 +2384,25 @@ const StockDashboard = () => {
   const [selectedForComparison, setSelectedForComparison] = useState([]);
 
   const [notes, setNotes] = useState([]);
-  const [positions, setPositions] = useState([]);
+  const [positions, setPositions] = useState([]); // Private - only user's own via RLS
   const [stances, setStances] = useState([]);
-  const [votes, setVotes] = useState([]);
+  const [members, setMembers] = useState([]); // All watchlist members for display name lookup
+
+  // Member lookup map: user_id -> display_name
+  const memberMap = useMemo(() => {
+    const map = {};
+    members.forEach(m => { map[m.user_id] = m.display_name; });
+    return map;
+  }, [members]);
+
+  // Ref for memberMap to use in real-time handlers
+  const memberMapRef = useRef(memberMap);
+  useEffect(() => { memberMapRef.current = memberMap; }, [memberMap]);
+
+  // Helper to get display name from user_id
+  const getDisplayName = useCallback((userId) => {
+    return memberMap[userId] || 'Unknown';
+  }, [memberMap]);
 
   // Social feed state
   const [feedItems, setFeedItems] = useState([]);
@@ -2365,14 +2418,9 @@ const StockDashboard = () => {
   const [penSymbols, setPenSymbols] = useState([]);
 
   const allUsers = useMemo(() => {
-    const users = new Set();
-    if (currentUser) users.add(currentUser);
-    notes.forEach(n => users.add(n.author));
-    positions.forEach(p => users.add(p.username));
-    stances.forEach(s => users.add(s.username));
-    Object.values(stockMeta).forEach(m => m?.added_by && users.add(m.added_by));
-    return [...users].filter(Boolean);
-  }, [currentUser, notes, positions, stances, stockMeta]);
+    // All users are now from watchlist_members
+    return members.map(m => m.display_name).filter(Boolean);
+  }, [members]);
 
   // Get unique sectors for filter
   const sectors = useMemo(() => {
@@ -2390,67 +2438,55 @@ const StockDashboard = () => {
     } else {
       document.documentElement.classList.remove('light');
     }
-    localStorage.setItem('stock-theme', theme);
+    storage.set(PREF_KEYS.THEME, theme);
   }, [theme]);
 
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
   };
 
-  useEffect(() => {
-    localStorage.setItem('watchlist-id', watchlistId);
-    const url = new URL(window.location);
-    url.searchParams.set('watchlist', watchlistId);
-    window.history.replaceState({}, '', url);
-  }, [watchlistId]);
-
-  useEffect(() => {
-    localStorage.setItem(`watchlist-${watchlistId}-symbols`, JSON.stringify(symbols));
-  }, [symbols, watchlistId]);
-
-  const handleSetUser = (name) => {
-    setCurrentUser(name);
-    localStorage.setItem('stock-username', name);
-    setShowUserSetup(false);
-    setShowWelcome(false);
+  // Handle sign out via auth context
+  const handleSignOut = async () => {
+    await signOut();
   };
 
-  const handleSignOut = () => {
-    localStorage.removeItem('stock-username');
-    localStorage.removeItem('has-seen-welcome');
-    setCurrentUser('');
-    setShowUserSetup(true);
-  };
-
-  const handleWelcomeComplete = (name) => {
-    handleSetUser(name);
-  };
-
-  // Load Supabase data
+  // Load Supabase data (only if user is a member of the watchlist)
   useEffect(() => {
-    if (!currentUser) return;
-    
+    if (!membership || !watchlist?.id) return;
+
     const loadData = async () => {
       try {
-        const [notesRes, positionsRes, stancesRes, votesRes, metaRes] = await Promise.all([
-          supabase.from('stock_notes').select('*').eq('watchlist_id', watchlistId).order('created_at', { ascending: false }),
-          supabase.from('stock_positions').select('*').eq('watchlist_id', watchlistId),
-          supabase.from('stock_stances').select('*').eq('watchlist_id', watchlistId),
-          supabase.from('stock_votes').select('*').eq('watchlist_id', watchlistId),
-          supabase.from('stock_meta').select('*').eq('watchlist_id', watchlistId),
+        // Use watchlist.id (UUID) for queries - RLS enforces membership
+        const watchlistId = watchlist.id;
+
+        const [membersRes, notesRes, positionsRes, stancesRes, stocksRes] = await Promise.all([
+          supabase.from('watchlist_members').select('user_id, display_name, joined_at').eq('watchlist_id', watchlistId),
+          supabase.from('notes').select('*').eq('watchlist_id', watchlistId).order('created_at', { ascending: false }),
+          supabase.from('positions').select('*').eq('watchlist_id', watchlistId), // RLS: only returns user's own
+          supabase.from('stances').select('*').eq('watchlist_id', watchlistId),
+          supabase.from('watchlist_stocks').select('*').eq('watchlist_id', watchlistId),
         ]);
-        
+
+        // Build member lookup map
+        const memberLookup = {};
+        if (membersRes.data) {
+          membersRes.data.forEach(m => { memberLookup[m.user_id] = m.display_name; });
+          setMembers(membersRes.data);
+        }
+
         if (notesRes.data) setNotes(notesRes.data);
         if (positionsRes.data) setPositions(positionsRes.data);
         if (stancesRes.data) setStances(stancesRes.data);
-        if (votesRes.data) setVotes(votesRes.data);
-        if (metaRes.data) {
+        if (stocksRes.data) {
+          // Build symbols list and stockMeta from watchlist_stocks
+          const syms = stocksRes.data.map(s => s.symbol);
+          setSymbols(syms);
           const meta = {};
-          metaRes.data.forEach(m => { meta[m.symbol] = m; });
+          stocksRes.data.forEach(s => { meta[s.symbol] = { added_by: s.added_by, added_at: s.added_at }; });
           setStockMeta(meta);
         }
 
-        // Build initial feed from existing data
+        // Build initial feed from existing data (with display names)
         const initialFeed = [];
 
         // Add notes to feed
@@ -2458,22 +2494,11 @@ const StockDashboard = () => {
           initialFeed.push({
             id: `note-${n.id}`,
             type: 'note',
-            username: n.author,
+            user_id: n.user_id,
+            username: memberLookup[n.user_id] || 'Unknown',
             symbol: n.symbol,
-            description: `"${n.text.length > 60 ? n.text.slice(0, 60) + '...' : n.text}"`,
+            description: `"${(n.content || '').length > 60 ? n.content.slice(0, 60) + '...' : n.content}"`,
             created_at: n.created_at
-          });
-        });
-
-        // Add positions to feed
-        (positionsRes.data || []).forEach(p => {
-          initialFeed.push({
-            id: `position-${p.id}`,
-            type: 'position',
-            username: p.username,
-            symbol: p.symbol,
-            description: `Added position: ${p.shares} shares at $${p.buy_price.toFixed(2)}`,
-            created_at: p.created_at
           });
         });
 
@@ -2482,22 +2507,11 @@ const StockDashboard = () => {
           initialFeed.push({
             id: `stance-${s.id}`,
             type: 'stance',
-            username: s.username,
+            user_id: s.user_id,
+            username: memberLookup[s.user_id] || 'Unknown',
             symbol: s.symbol,
-            description: `Set stance to ${s.stance === 'bull' ? 'Bullish' : s.stance === 'bear' ? 'Bearish' : 'Neutral'}`,
-            created_at: s.created_at
-          });
-        });
-
-        // Add votes to feed
-        (votesRes.data || []).forEach(v => {
-          initialFeed.push({
-            id: `vote-${v.id}`,
-            type: 'vote',
-            username: v.username,
-            symbol: v.symbol,
-            description: v.vote === 'up' ? 'Upvoted this stock' : 'Downvoted this stock',
-            created_at: v.created_at
+            description: `Set stance to ${s.stance === 'bullish' ? 'Bullish' : s.stance === 'bearish' ? 'Bearish' : 'Neutral'}`,
+            created_at: s.updated_at
           });
         });
 
@@ -2510,11 +2524,11 @@ const StockDashboard = () => {
         console.error('Error loading data:', err);
       }
     };
-    
+
     loadData();
-    
-    // Helper to add feed items
-    const addFeedItem = (type, payload) => {
+
+    // Helper to add feed items (uses memberLookup from loadData closure)
+    const addFeedItem = (type, payload, lookup = {}) => {
       const item = payload.new;
       let feedItem = null;
 
@@ -2523,19 +2537,10 @@ const StockDashboard = () => {
           feedItem = {
             id: `note-${item.id}`,
             type: 'note',
-            username: item.author,
+            user_id: item.user_id,
+            username: lookup[item.user_id] || 'Unknown',
             symbol: item.symbol,
-            description: `"${item.text.length > 60 ? item.text.slice(0, 60) + '...' : item.text}"`,
-            created_at: item.created_at
-          };
-          break;
-        case 'position':
-          feedItem = {
-            id: `position-${item.id}`,
-            type: 'position',
-            username: item.username,
-            symbol: item.symbol,
-            description: `Added position: ${item.shares} shares at $${item.buy_price.toFixed(2)}`,
+            description: `"${(item.content || '').length > 60 ? item.content.slice(0, 60) + '...' : item.content}"`,
             created_at: item.created_at
           };
           break;
@@ -2543,20 +2548,22 @@ const StockDashboard = () => {
           feedItem = {
             id: `stance-${item.id}`,
             type: 'stance',
-            username: item.username,
+            user_id: item.user_id,
+            username: lookup[item.user_id] || 'Unknown',
             symbol: item.symbol,
-            description: `Set stance to ${item.stance === 'bull' ? 'Bullish' : item.stance === 'bear' ? 'Bearish' : 'Neutral'}`,
-            created_at: item.created_at
+            description: `Set stance to ${item.stance === 'bullish' ? 'Bullish' : item.stance === 'bearish' ? 'Bearish' : 'Neutral'}`,
+            created_at: item.updated_at
           };
           break;
-        case 'vote':
+        case 'stock':
           feedItem = {
-            id: `vote-${item.id}`,
-            type: 'vote',
-            username: item.username,
+            id: `stock-${item.id}`,
+            type: 'stock_added',
+            user_id: item.added_by,
+            username: lookup[item.added_by] || 'Unknown',
             symbol: item.symbol,
-            description: item.vote === 'up' ? 'Upvoted this stock' : 'Downvoted this stock',
-            created_at: item.created_at
+            description: `Added ${item.symbol} to the watchlist`,
+            created_at: item.added_at
           };
           break;
         default:
@@ -2564,98 +2571,97 @@ const StockDashboard = () => {
       }
 
       if (feedItem) {
-        setFeedItems(prev => [feedItem, ...prev].slice(0, 50)); // Keep last 50 items
+        setFeedItems(prev => [feedItem, ...prev].slice(0, 50));
       }
     };
 
-    // Real-time subscriptions
+    // Real-time subscriptions using watchlist.id (UUID)
     const channel = supabase.channel(`watchlist-${watchlistId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_notes', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setNotes(prev => [payload.new, ...prev]);
-            addFeedItem('note', payload);
+            addFeedItem('note', payload, memberMapRef.current);
           }
           else if (payload.eventType === 'DELETE') setNotes(prev => prev.filter(n => n.id !== payload.old.id));
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_positions', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'positions', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
+          // Positions are private - only user's own, so just update local state
           if (payload.eventType === 'INSERT') {
             setPositions(prev => [...prev, payload.new]);
-            addFeedItem('position', payload);
           }
           else if (payload.eventType === 'DELETE') setPositions(prev => prev.filter(p => p.id !== payload.old.id));
           else if (payload.eventType === 'UPDATE') setPositions(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_stances', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stances', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setStances(prev => [...prev, payload.new]);
-            addFeedItem('stance', payload);
+            addFeedItem('stance', payload, memberMapRef.current);
           }
           else if (payload.eventType === 'DELETE') setStances(prev => prev.filter(s => s.id !== payload.old.id));
           else if (payload.eventType === 'UPDATE') {
             setStances(prev => prev.map(s => s.id === payload.new.id ? payload.new : s));
-            addFeedItem('stance', payload);
+            addFeedItem('stance', payload, memberMapRef.current);
           }
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stock_votes', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_stocks', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
-            setVotes(prev => [...prev, payload.new]);
-            addFeedItem('vote', payload);
+            setSymbols(prev => [...prev, payload.new.symbol]);
+            setStockMeta(prev => ({ ...prev, [payload.new.symbol]: { added_by: payload.new.added_by, added_at: payload.new.added_at } }));
+            addFeedItem('stock', payload, memberMapRef.current);
           }
-          else if (payload.eventType === 'DELETE') setVotes(prev => prev.filter(v => v.id !== payload.old.id));
-          else if (payload.eventType === 'UPDATE') {
-            setVotes(prev => prev.map(v => v.id === payload.new.id ? payload.new : v));
-            addFeedItem('vote', payload);
+          else if (payload.eventType === 'DELETE') {
+            setSymbols(prev => prev.filter(s => s !== payload.old.symbol));
+            setStockMeta(prev => { const next = { ...prev }; delete next[payload.old.symbol]; return next; });
           }
         })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_members', filter: `watchlist_id=eq.${watchlistId}` },
+        (payload) => {
+          // Update members list when someone joins/leaves
+          if (payload.eventType === 'INSERT') {
+            setMembers(prev => [...prev, payload.new]);
+          }
+          else if (payload.eventType === 'DELETE') setMembers(prev => prev.filter(m => m.user_id !== payload.old.user_id));
+          else if (payload.eventType === 'UPDATE') setMembers(prev => prev.map(m => m.user_id === payload.new.user_id ? payload.new : m));
+        })
       .subscribe((status) => setIsConnected(status === 'SUBSCRIBED'));
-    
-    return () => { supabase.removeChannel(channel); };
-  }, [currentUser, watchlistId]);
 
-  // Supabase handlers
-  const handleAddNote = async (symbol, text) => {
-    await supabase.from('stock_notes').insert([{ watchlist_id: watchlistId, symbol, text, author: currentUser }]);
+    return () => { supabase.removeChannel(channel); };
+  }, [membership, watchlist]);
+
+  // Supabase handlers - use new schema with user_id and watchlist.id
+  const handleAddNote = async (symbol, content) => {
+    if (!watchlist?.id || !user?.id) return;
+    await supabase.from('notes').insert([{ watchlist_id: watchlist.id, symbol, content, user_id: user.id }]);
   };
-  
+
   const handleDeleteNote = async (noteId) => {
-    await supabase.from('stock_notes').delete().eq('id', noteId);
+    await supabase.from('notes').delete().eq('id', noteId);
   };
-  
-  const handleAddPosition = async (symbol, buyPrice, shares) => {
-    await supabase.from('stock_positions').insert([{ watchlist_id: watchlistId, symbol, buy_price: buyPrice, shares, username: currentUser }]);
+
+  const handleAddPosition = async (symbol, avgCost, shares) => {
+    if (!watchlist?.id || !user?.id) return;
+    await supabase.from('positions').insert([{ watchlist_id: watchlist.id, symbol, avg_cost: avgCost, shares, user_id: user.id }]);
   };
-  
+
   const handleRemovePosition = async (positionId) => {
-    await supabase.from('stock_positions').delete().eq('id', positionId);
+    await supabase.from('positions').delete().eq('id', positionId);
   };
-  
+
   const handleSetStance = async (symbol, stance) => {
-    const existing = stances.find(s => s.symbol === symbol && s.username === currentUser);
+    if (!watchlist?.id || !user?.id) return;
+    const existing = stances.find(s => s.symbol === symbol && s.user_id === user.id);
     if (existing) {
       if (stance && stance !== 'neutral') {
-        await supabase.from('stock_stances').update({ stance }).eq('id', existing.id);
+        await supabase.from('stances').update({ stance, updated_at: new Date().toISOString() }).eq('id', existing.id);
       } else {
-        await supabase.from('stock_stances').delete().eq('id', existing.id);
+        await supabase.from('stances').delete().eq('id', existing.id);
       }
     } else if (stance && stance !== 'neutral') {
-      await supabase.from('stock_stances').insert([{ watchlist_id: watchlistId, symbol, stance, username: currentUser }]);
-    }
-  };
-  
-  const handleVote = async (symbol, vote) => {
-    const existing = votes.find(v => v.symbol === symbol && v.username === currentUser);
-    if (existing) {
-      if (existing.vote === vote) {
-        await supabase.from('stock_votes').delete().eq('id', existing.id);
-      } else {
-        await supabase.from('stock_votes').update({ vote }).eq('id', existing.id);
-      }
-    } else {
-      await supabase.from('stock_votes').insert([{ watchlist_id: watchlistId, symbol, vote, username: currentUser }]);
+      await supabase.from('stances').insert([{ watchlist_id: watchlist.id, symbol, stance, user_id: user.id }]);
     }
   };
 
@@ -2698,35 +2704,33 @@ const StockDashboard = () => {
     }
   }, [symbols, fetchStockDataFn]);
 
-  useEffect(() => { 
-    if (currentUser) fetchAllData(); 
-  }, [currentUser]);
+  useEffect(() => {
+    if (membership && watchlist) fetchAllData();
+  }, [membership, watchlist, fetchAllData]);
 
   const addStock = async () => {
+    if (!watchlist?.id || !user?.id) return;
+
     const symbol = newSymbol.toUpperCase().trim();
     if (!symbol || symbols.includes(symbol) || symbol.length > 5) return;
 
-    setSymbols(prev => [...prev, symbol]);
     setNewSymbol('');
     setLoadingSymbols(prev => new Set([...prev, symbol]));
 
     try {
-      await supabase.from('stock_meta').insert([{ watchlist_id: watchlistId, symbol, added_by: currentUser }]);
+      // Insert into watchlist_stocks - RLS will verify membership
+      await supabase.from('watchlist_stocks').insert([{ watchlist_id: watchlist.id, symbol, added_by: user.id }]);
+      // Real-time subscription will update symbols and stockMeta
     } catch (e) {
-      console.log('Error adding stock meta:', e);
+      console.log('Error adding stock:', e);
+      setLoadingSymbols(prev => { const next = new Set(prev); next.delete(symbol); return next; });
+      return;
     }
-    setStockMeta(prev => ({ ...prev, [symbol]: { added_by: currentUser } }));
 
-    // Add to social feed
-    setFeedItems(prev => [{
-      id: `stock-${symbol}-${Date.now()}`,
-      type: 'stock_added',
-      username: currentUser,
-      symbol: symbol,
-      description: `Added ${symbol} to the watchlist`,
-      created_at: new Date().toISOString()
-    }, ...prev].slice(0, 50));
-    
+    // Optimistically add to local state (real-time will confirm)
+    setSymbols(prev => [...prev, symbol]);
+    setStockMeta(prev => ({ ...prev, [symbol]: { added_by: user.id, added_at: new Date().toISOString() } }));
+
     const data = await fetchStockDataFn(symbol);
     if (data) {
       setStockData(prev => ({ ...prev, [symbol]: data }));
@@ -2805,18 +2809,79 @@ const StockDashboard = () => {
     return { avgYTD, avgChange, total: stocks.length };
   }, [stockData]);
 
-  // Check if current user can delete a stock
+  // Check if current user can delete a stock (compare user.id, not display name)
   const canDeleteStock = (symbol) => {
     const meta = stockMeta[symbol];
-    return meta?.added_by === currentUser || !meta?.added_by;
+    return meta?.added_by === user?.id || !meta?.added_by;
   };
 
-  // Show welcome modal for first-time users
-  if (showWelcome && !currentUser) {
-    return <WelcomeModal onComplete={handleWelcomeComplete} />;
+  // Show loading while auth is initializing
+  if (authLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
+        <div className="text-center">
+          <span className="text-5xl mb-4 block">🐂</span>
+          <p className="text-slate-500">Loading...</p>
+        </div>
+      </div>
+    );
   }
 
-  if (showUserSetup) return <UserSetupModal onSetUser={handleSetUser} />;
+  // Show auth modal if not signed in
+  if (!user) {
+    return <AuthModal onClose={() => {}} />;
+  }
+
+  // Show loading while membership is being checked
+  if (membershipLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
+        <div className="text-center">
+          <span className="text-5xl mb-4 block">🐂</span>
+          <p className="text-slate-500">Checking membership...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Show join modal if user is not a member of this watchlist
+  if (!membership && watchlist) {
+    return (
+      <JoinWatchlistModal
+        watchlist={watchlist}
+        user={user}
+        profile={profile}
+        onJoin={(newMembership) => {
+          setMembership(newMembership);
+          setShowJoinModal(false);
+        }}
+        onCancel={() => {
+          // Could navigate away or sign out
+          handleSignOut();
+        }}
+      />
+    );
+  }
+
+  // Watchlist doesn't exist - show create option
+  if (!watchlist) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
+        <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md">
+          <span className="text-5xl mb-4 block">🐂</span>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Watchlist Not Found</h2>
+          <p className="text-slate-500 mb-4">The watchlist "{watchlistSlug}" doesn't exist.</p>
+          <button
+            onClick={() => window.location.href = '?watchlist=bullpen'}
+            className="px-6 py-3 text-white font-semibold rounded-xl"
+            style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
+          >
+            Go to Default Watchlist
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen p-4 md:p-6" style={{ background: theme === 'dark' ? 'linear-gradient(180deg, #0f172a 0%, #1e293b 100%)' : 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
@@ -2852,9 +2917,6 @@ const StockDashboard = () => {
               currentUser={currentUser}
               theme={theme}
               onSignOut={handleSignOut}
-              onShowAlerts={() => setShowPriceAlerts(true)}
-              onShowSector={() => setShowSectorAllocation(true)}
-              onShowPortfolio={() => setShowPortfolioValue(true)}
               toggleTheme={toggleTheme}
             />
 
@@ -3348,7 +3410,7 @@ const StockDashboard = () => {
       </div>
 
       {/* Modals */}
-      {showShareModal && <ShareModal watchlistId={watchlistId} onClose={() => setShowShareModal(false)} />}
+      {showShareModal && <ShareModal watchlistSlug={watchlistSlug} onClose={() => setShowShareModal(false)} />}
       {showHelpModal && <HelpModal onClose={() => setShowHelpModal(false)} theme={theme} />}
     </div>
   );
