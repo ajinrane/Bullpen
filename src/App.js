@@ -969,22 +969,28 @@ const PositionEntry = ({ symbol, positions, currentPrice, currentUser, onAddPosi
       {!myPosition && (
         <>
           {showForm ? (
-            <div className="bg-slate-700 rounded p-3 space-y-2">
-              <div className="flex gap-2">
-                <input type="number" value={shares} onChange={(e) => setShares(e.target.value)}
-                  placeholder="Shares" step="0.01"
-                  className="flex-1 px-2 py-1 bg-slate-600 text-white text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
-                <input type="number" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)}
-                  placeholder="Buy price" step="0.01"
-                  className="flex-1 px-2 py-1 bg-slate-600 text-white text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
+            <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
+              <div className="space-y-3">
+                <div>
+                  <label className="block text-slate-400 text-xs mb-1">Number of Shares</label>
+                  <input type="number" value={shares} onChange={(e) => setShares(e.target.value)}
+                    placeholder="e.g. 10" step="0.01"
+                    className="w-full px-3 py-2 bg-slate-600 text-white text-sm rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                </div>
+                <div>
+                  <label className="block text-slate-400 text-xs mb-1">Average Cost per Share ($)</label>
+                  <input type="number" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)}
+                    placeholder="e.g. 150.00" step="0.01"
+                    className="w-full px-3 py-2 bg-slate-600 text-white text-sm rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                </div>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 mt-4">
                 <button onClick={handleSubmit} disabled={!buyPrice || !shares}
-                  className="flex-1 py-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white text-sm rounded">
+                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors">
                   Add Position
                 </button>
                 <button onClick={() => setShowForm(false)}
-                  className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-white text-sm rounded">
+                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-lg transition-colors">
                   Cancel
                 </button>
               </div>
@@ -1242,7 +1248,7 @@ const PortfolioSummary = ({ positions, stockData, currentUser, allUsers, onAddPo
                   <span className={`font-semibold ${isCurrentUser ? color.text : theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{user}</span>
                   {isCurrentUser && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded">You</span>}
                   <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {portfolio.positionCount} position{portfolio.positionCount !== 1 ? 's' : ''} · ${portfolio.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                    {portfolio.positionCount} position{portfolio.positionCount !== 1 ? 's' : ''}
                   </div>
                 </div>
               </div>
@@ -1403,10 +1409,12 @@ const ShareModal = ({ watchlistId, onClose }) => {
 const WelcomeModal = ({ onComplete }) => {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
+  const [pin, setPin] = useState('');
+  const [error, setError] = useState('');
 
   const steps = [
     {
-      title: 'Welcome to Stock Watchlist!',
+      title: 'Welcome to Bullpen!',
       icon: '👋',
       description: 'Track your favorite stocks, compete with friends, and make smarter investment decisions together.',
     },
@@ -1416,9 +1424,9 @@ const WelcomeModal = ({ onComplete }) => {
       description: 'Add positions with your buy price to track P/L. See how you rank against other investors on the leaderboard.',
     },
     {
-      title: 'Collaborate & Share',
-      icon: '🤝',
-      description: 'Share your watchlist with friends, leave notes on stocks, and see what others are bullish or bearish on.',
+      title: 'Create Your Account',
+      icon: '🔐',
+      description: 'Choose a username and PIN to secure your account.',
     },
   ];
 
@@ -1430,10 +1438,23 @@ const WelcomeModal = ({ onComplete }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (name.trim()) {
-      localStorage.setItem('has-seen-welcome', 'true');
-      onComplete(name.trim());
+    if (!name.trim() || !pin.trim()) return;
+
+    if (pin.length < 4) {
+      setError('PIN must be at least 4 digits.');
+      return;
     }
+
+    const storedUsers = JSON.parse(localStorage.getItem('bullpen-users') || '{}');
+    if (storedUsers[name.trim()]) {
+      setError('Username already exists. Please choose another.');
+      return;
+    }
+
+    storedUsers[name.trim()] = pin;
+    localStorage.setItem('bullpen-users', JSON.stringify(storedUsers));
+    localStorage.setItem('has-seen-welcome', 'true');
+    onComplete(name.trim());
   };
 
   return (
@@ -1459,17 +1480,32 @@ const WelcomeModal = ({ onComplete }) => {
 
             {step === 2 ? (
               <form onSubmit={handleSubmit}>
-                <input
-                  type="text"
-                  value={name}
-                  onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter your name"
-                  className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-                  autoFocus
-                />
+                <div className="mb-3">
+                  <label className="block text-slate-500 text-sm mb-1">Username</label>
+                  <input
+                    type="text"
+                    value={name}
+                    onChange={(e) => { setName(e.target.value); setError(''); }}
+                    placeholder="Choose a username"
+                    className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    autoFocus
+                  />
+                </div>
+                <div className="mb-4">
+                  <label className="block text-slate-500 text-sm mb-1">PIN (4+ digits)</label>
+                  <input
+                    type="password"
+                    value={pin}
+                    onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
+                    placeholder="Create a PIN"
+                    maxLength={8}
+                    className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+                {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
                 <button
                   type="submit"
-                  disabled={!name.trim()}
+                  disabled={!name.trim() || !pin.trim()}
                   className="w-full py-3 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
                   style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
                 >
@@ -1503,25 +1539,71 @@ const WelcomeModal = ({ onComplete }) => {
 
 const UserSetupModal = ({ onSetUser }) => {
   const [name, setName] = useState('');
+  const [pin, setPin] = useState('');
+  const [isReturningUser, setIsReturningUser] = useState(false);
+  const [error, setError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (name.trim()) onSetUser(name.trim());
+    if (!name.trim() || !pin.trim()) return;
+
+    const storedUsers = JSON.parse(localStorage.getItem('bullpen-users') || '{}');
+
+    if (isReturningUser) {
+      // Sign in - verify PIN
+      if (storedUsers[name.trim()] && storedUsers[name.trim()] === pin) {
+        onSetUser(name.trim());
+      } else if (!storedUsers[name.trim()]) {
+        setError('Username not found. Please sign up first.');
+      } else {
+        setError('Incorrect PIN. Please try again.');
+      }
+    } else {
+      // Sign up - create new user
+      if (storedUsers[name.trim()]) {
+        setError('Username already exists. Please sign in instead.');
+        return;
+      }
+      if (pin.length < 4) {
+        setError('PIN must be at least 4 digits.');
+        return;
+      }
+      storedUsers[name.trim()] = pin;
+      localStorage.setItem('bullpen-users', JSON.stringify(storedUsers));
+      onSetUser(name.trim());
+    }
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold text-white mb-2">👋 Welcome!</h2>
-        <p className="text-slate-400 text-sm mb-4">Enter your name to start tracking stocks with friends.</p>
+        <h2 className="text-xl font-bold text-white mb-2">👋 Welcome to Bullpen!</h2>
+        <p className="text-slate-400 text-sm mb-4">
+          {isReturningUser ? 'Sign in to your account.' : 'Create an account to start tracking stocks with friends.'}
+        </p>
         <form onSubmit={handleSubmit}>
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)}
-            placeholder="Your name"
-            className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
-            autoFocus />
-          <button type="submit" disabled={!name.trim()}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-semibold rounded-lg transition-colors">
-            Get Started
+          <div className="mb-3">
+            <label className="block text-slate-400 text-sm mb-1">Username</label>
+            <input type="text" value={name} onChange={(e) => { setName(e.target.value); setError(''); }}
+              placeholder="Enter username"
+              className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              autoFocus />
+          </div>
+          <div className="mb-4">
+            <label className="block text-slate-400 text-sm mb-1">PIN</label>
+            <input type="password" value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
+              placeholder={isReturningUser ? "Enter your PIN" : "Create a 4+ digit PIN"}
+              maxLength={8}
+              className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
+          </div>
+          {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
+          <button type="submit" disabled={!name.trim() || !pin.trim()}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-semibold rounded-lg transition-colors mb-3">
+            {isReturningUser ? 'Sign In' : 'Create Account'}
+          </button>
+          <button type="button" onClick={() => { setIsReturningUser(!isReturningUser); setError(''); }}
+            className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors">
+            {isReturningUser ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
           </button>
         </form>
       </div>
@@ -1530,7 +1612,7 @@ const UserSetupModal = ({ onSetUser }) => {
 };
 
 // User Dropdown Menu
-const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSector, onShowPortfolio, toggleTheme }) => {
+const UserDropdown = ({ currentUser, theme, onSignOut, toggleTheme }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -1545,9 +1627,6 @@ const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSecto
   }, []);
 
   const menuItems = [
-    { icon: Bell, label: 'Price Alerts', onClick: () => { onShowAlerts(); setIsOpen(false); } },
-    { icon: PieChartIcon, label: 'Sector Allocation', onClick: () => { onShowSector(); setIsOpen(false); } },
-    { icon: Wallet, label: 'Portfolio Value', onClick: () => { onShowPortfolio(); setIsOpen(false); } },
     { icon: theme === 'dark' ? Sun : Moon, label: theme === 'dark' ? 'Light Mode' : 'Dark Mode', onClick: () => { toggleTheme(); setIsOpen(false); } },
     { divider: true },
     { icon: X, label: 'Sign Out', onClick: () => { onSignOut(); setIsOpen(false); }, danger: true },
@@ -2502,7 +2581,7 @@ const StockDashboard = () => {
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Stock Watchlist</h1>
+              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Bullpen</h1>
               <span className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full font-medium ${isConnected ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`} style={{ boxShadow: isConnected ? '0 0 8px rgba(52,199,89,0.5)' : 'none' }}></span>
                 {isConnected ? 'Live' : 'Offline'}
@@ -2527,23 +2606,8 @@ const StockDashboard = () => {
               currentUser={currentUser}
               theme={theme}
               onSignOut={handleSignOut}
-              onShowAlerts={() => setShowPriceAlerts(true)}
-              onShowSector={() => setShowSectorAllocation(true)}
-              onShowPortfolio={() => setShowPortfolioValue(true)}
               toggleTheme={toggleTheme}
             />
-
-            {/* Feed Button */}
-            <button onClick={() => setShowFeed(!showFeed)}
-              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${showFeed ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-blue-500'}`}
-              style={showFeed ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 15px rgba(175,82,222,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
-              <Activity className="w-4 h-4" /> Feed
-              {feedItems.length > 0 && (
-                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${showFeed ? 'bg-white/20 text-white' : 'bg-purple-500 text-white'}`}>
-                  {feedItems.length}
-                </span>
-              )}
-            </button>
 
             {/* Share Button */}
             <button onClick={() => setShowShareModal(true)}
@@ -2583,16 +2647,6 @@ const StockDashboard = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
-        )}
-
-        {/* Social Feed - shows on both tabs */}
-        {showFeed && (
-          <SocialFeed
-            feedItems={feedItems}
-            currentUser={currentUser}
-            theme={theme}
-            onClose={() => setShowFeed(false)}
-          />
         )}
 
         {/* LEADERBOARD TAB */}
@@ -2664,54 +2718,23 @@ const StockDashboard = () => {
               {/* View mode toggle */}
               <div className="flex rounded-xl p-1" style={{ background: 'rgba(60,60,67,0.12)' }}>
                 <button onClick={() => setViewMode('grid')}
-                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'grid' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'grid' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="Grid View">
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button onClick={() => setViewMode('compact')}
-                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'compact' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'compact' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
+                  title="List View">
                   <List className="w-4 h-4" />
                 </button>
               </div>
 
-              {/* Comparison mode toggle */}
-              <button onClick={toggleComparisonMode}
-                className={`px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-all ${comparisonMode ? 'text-white' : 'text-slate-600 hover:text-purple-500'}`}
-                style={comparisonMode ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 12px rgba(175,82,222,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
-                <BarChart2 className="w-4 h-4" />
-                {comparisonMode ? `Compare (${selectedForComparison.length})` : 'Compare'}
-              </button>
-
               {/* Filter toggle */}
               <button onClick={() => setShowFilters(!showFilters)}
                 className={`px-3 py-2 rounded-xl flex items-center gap-2 transition-all ${showFilters ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showFilters ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
+                style={showFilters ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Filter & Sort">
                 <Filter className="w-4 h-4" />
-              </button>
-
-              {/* Feature toggles */}
-              <button onClick={() => setShowNewsFeed(!showNewsFeed)}
-                className={`px-3 py-2 rounded-xl transition-all ${showNewsFeed ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showNewsFeed ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="News Feed">
-                <Newspaper className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowSectorAllocation(!showSectorAllocation)}
-                className={`px-3 py-2 rounded-xl transition-all ${showSectorAllocation ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showSectorAllocation ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Sector Allocation">
-                <PieChartIcon className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowPortfolioValue(!showPortfolioValue)}
-                className={`px-3 py-2 rounded-xl transition-all ${showPortfolioValue ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showPortfolioValue ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Portfolio Value">
-                <Wallet className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowPriceAlerts(!showPriceAlerts)}
-                className={`px-3 py-2 rounded-xl transition-all ${showPriceAlerts ? 'text-white' : 'text-slate-600 hover:text-orange-500'}`}
-                style={showPriceAlerts ? { background: 'linear-gradient(180deg, #FF9F0A 0%, #FF9500 100%)', boxShadow: '0 4px 12px rgba(255,149,0,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Price Alerts">
-                <Bell className="w-4 h-4" />
               </button>
 
               <button onClick={fetchAllData} disabled={loading}
@@ -2754,58 +2777,6 @@ const StockDashboard = () => {
           )}
             </div>
 
-            {/* Comparison Chart */}
-            {comparisonMode && selectedForComparison.length >= 2 && (
-              <ComparisonChart
-                selectedStocks={selectedForComparison}
-                stockData={stockData}
-                theme={theme}
-                onClose={() => {
-                  setComparisonMode(false);
-                  setSelectedForComparison([]);
-                }}
-              />
-            )}
-
-            {/* News Feed */}
-            {showNewsFeed && (
-              <NewsFeed
-                symbols={symbols}
-                theme={theme}
-                onClose={() => setShowNewsFeed(false)}
-              />
-            )}
-
-            {/* Sector Allocation */}
-            {showSectorAllocation && (
-              <SectorAllocation
-                stockData={stockData}
-                positions={positions}
-                currentUser={currentUser}
-                theme={theme}
-                onClose={() => setShowSectorAllocation(false)}
-              />
-            )}
-
-            {/* Portfolio Value Chart */}
-            {showPortfolioValue && (
-              <PortfolioValueChart
-                stockData={stockData}
-                positions={positions}
-                currentUser={currentUser}
-                theme={theme}
-                onClose={() => setShowPortfolioValue(false)}
-              />
-            )}
-
-            {/* Price Alerts */}
-            {showPriceAlerts && (
-              <PriceAlertManager
-                stockData={stockData}
-                theme={theme}
-                onClose={() => setShowPriceAlerts(false)}
-              />
-            )}
 
             {/* Stock Grid or Compact List */}
             {loading && Object.keys(stockData).length === 0 ? (
@@ -2824,9 +2795,6 @@ const StockDashboard = () => {
                 positions={positions}
                 currentUser={currentUser}
                 onExpand={toggleExpand}
-                comparisonMode={comparisonMode}
-                isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
-                onToggleComparison={toggleStockComparison}
                 theme={theme}
                   />
                 ))}
@@ -2855,9 +2823,6 @@ const StockDashboard = () => {
                     currentUser={currentUser}
                     isConnected={isConnected}
                     addedBy={stockMeta[stock.symbol]?.added_by}
-                    comparisonMode={comparisonMode}
-                    isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
-                    onToggleComparison={toggleStockComparison}
                     theme={theme}
                   />
                 ))}
