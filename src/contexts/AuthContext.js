@@ -12,21 +12,72 @@ import { createClient } from '@supabase/supabase-js';
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
-// TEMP DEBUG: Check if env vars are loaded (remove after confirming)
-console.log('ENV CHECK', { hasUrl: !!SUPABASE_URL, hasAnon: !!SUPABASE_ANON_KEY });
-
-if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('Missing Supabase environment variables. Check .env.local or Vercel env settings.');
-}
-
-// Create Supabase client (singleton)
-export const supabase = createClient(SUPABASE_URL || '', SUPABASE_ANON_KEY || '', {
-  auth: {
-    autoRefreshToken: true,
-    persistSession: true,
-    detectSessionInUrl: true,
-  },
+// TEMP DEBUG: Log what we see (safe booleans only)
+console.log('ENV CHECK', {
+  hasUrl: !!SUPABASE_URL,
+  hasAnon: !!SUPABASE_ANON_KEY,
+  urlLength: SUPABASE_URL?.length || 0,
+  keyLength: SUPABASE_ANON_KEY?.length || 0
 });
+
+// Track if env vars are missing
+const ENV_MISSING = !SUPABASE_URL || !SUPABASE_ANON_KEY;
+
+// Create Supabase client ONLY if env vars exist
+export const supabase = ENV_MISSING
+  ? null
+  : createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+      auth: {
+        autoRefreshToken: true,
+        persistSession: true,
+        detectSessionInUrl: true,
+      },
+    });
+
+// Config error component (shown when env vars missing)
+const ConfigError = () => (
+  <div style={{
+    minHeight: '100vh',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)',
+    padding: '20px'
+  }}>
+    <div style={{
+      background: 'white',
+      borderRadius: '16px',
+      padding: '32px',
+      maxWidth: '500px',
+      textAlign: 'center',
+      boxShadow: '0 4px 20px rgba(0,0,0,0.1)'
+    }}>
+      <div style={{ fontSize: '48px', marginBottom: '16px' }}>⚠️</div>
+      <h1 style={{ color: '#1e293b', marginBottom: '8px' }}>Configuration Error</h1>
+      <p style={{ color: '#64748b', marginBottom: '16px' }}>
+        Supabase environment variables are not configured.
+      </p>
+      <div style={{
+        background: '#fef2f2',
+        border: '1px solid #fecaca',
+        borderRadius: '8px',
+        padding: '12px',
+        textAlign: 'left',
+        fontSize: '14px',
+        color: '#991b1b'
+      }}>
+        <strong>Missing:</strong>
+        <ul style={{ margin: '8px 0 0 20px', padding: 0 }}>
+          <li>REACT_APP_SUPABASE_URL</li>
+          <li>REACT_APP_SUPABASE_ANON_KEY</li>
+        </ul>
+      </div>
+      <p style={{ color: '#64748b', fontSize: '14px', marginTop: '16px' }}>
+        Add these in Vercel → Settings → Environment Variables, then redeploy.
+      </p>
+    </div>
+  </div>
+);
 
 // Context
 const AuthContext = createContext({
@@ -43,14 +94,15 @@ const AuthContext = createContext({
 
 export const useAuth = () => useContext(AuthContext);
 
-export const AuthProvider = ({ children }) => {
+// Internal provider that uses hooks (only rendered when supabase exists)
+const AuthProviderInternal = ({ children }) => {
   const [user, setUser] = useState(null);
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
 
   // Fetch user profile from profiles table
   const fetchProfile = useCallback(async (userId) => {
-    if (!userId) {
+    if (!userId || !supabase) {
       setProfile(null);
       return null;
     }
@@ -63,7 +115,6 @@ export const AuthProvider = ({ children }) => {
         .single();
 
       if (error) {
-        // Profile might not exist yet (new user)
         if (error.code === 'PGRST116') {
           console.log('Profile not found, may be creating...');
           return null;
@@ -82,6 +133,8 @@ export const AuthProvider = ({ children }) => {
 
   // Initialize auth state
   useEffect(() => {
+    if (!supabase) return;
+
     let mounted = true;
 
     const initAuth = async () => {
@@ -105,7 +158,6 @@ export const AuthProvider = ({ children }) => {
 
     initAuth();
 
-    // Listen for auth changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       async (event, session) => {
         if (!mounted) return;
@@ -113,7 +165,6 @@ export const AuthProvider = ({ children }) => {
         setUser(session?.user ?? null);
 
         if (session?.user) {
-          // Small delay to allow trigger to create profile
           setTimeout(() => {
             if (mounted) fetchProfile(session.user.id);
           }, 500);
@@ -135,6 +186,7 @@ export const AuthProvider = ({ children }) => {
 
   // Sign up with email/password
   const signUp = useCallback(async (email, password, username) => {
+    if (!supabase) return { data: null, error: new Error('Supabase not configured') };
     try {
       const { data, error } = await supabase.auth.signUp({
         email,
@@ -146,7 +198,6 @@ export const AuthProvider = ({ children }) => {
           },
         },
       });
-
       if (error) return { data: null, error };
       return { data, error: null };
     } catch (error) {
@@ -156,12 +207,12 @@ export const AuthProvider = ({ children }) => {
 
   // Sign in with email/password
   const signIn = useCallback(async (email, password) => {
+    if (!supabase) return { data: null, error: new Error('Supabase not configured') };
     try {
       const { data, error } = await supabase.auth.signInWithPassword({
         email,
         password,
       });
-
       if (error) return { data: null, error };
       return { data, error: null };
     } catch (error) {
@@ -169,16 +220,14 @@ export const AuthProvider = ({ children }) => {
     }
   }, []);
 
-  // Sign in with magic link (email only)
+  // Sign in with magic link
   const signInWithMagicLink = useCallback(async (email, redirectTo) => {
+    if (!supabase) return { data: null, error: new Error('Supabase not configured') };
     try {
       const { data, error } = await supabase.auth.signInWithOtp({
         email,
-        options: {
-          emailRedirectTo: redirectTo,
-        },
+        options: { emailRedirectTo: redirectTo },
       });
-
       if (error) return { data: null, error };
       return { data, error: null };
     } catch (error) {
@@ -188,6 +237,7 @@ export const AuthProvider = ({ children }) => {
 
   // Sign out
   const signOut = useCallback(async () => {
+    if (!supabase) return { error: new Error('Supabase not configured') };
     try {
       const { error } = await supabase.auth.signOut();
       if (!error) {
@@ -202,23 +252,18 @@ export const AuthProvider = ({ children }) => {
 
   // Update profile
   const updateProfile = useCallback(async (updates) => {
-    if (!user) {
-      return { data: null, error: new Error('Not authenticated') };
-    }
+    if (!supabase) return { data: null, error: new Error('Supabase not configured') };
+    if (!user) return { data: null, error: new Error('Not authenticated') };
 
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .update({
-          ...updates,
-          updated_at: new Date().toISOString(),
-        })
+        .update({ ...updates, updated_at: new Date().toISOString() })
         .eq('id', user.id)
         .select()
         .single();
 
       if (error) return { data: null, error };
-
       setProfile(data);
       return { data, error: null };
     } catch (error) {
@@ -228,9 +273,7 @@ export const AuthProvider = ({ children }) => {
 
   // Refresh profile
   const refreshProfile = useCallback(async () => {
-    if (user) {
-      await fetchProfile(user.id);
-    }
+    if (user) await fetchProfile(user.id);
   }, [user, fetchProfile]);
 
   const value = {
@@ -250,6 +293,14 @@ export const AuthProvider = ({ children }) => {
       {children}
     </AuthContext.Provider>
   );
+};
+
+// Main AuthProvider - shows config error or renders internal provider
+export const AuthProvider = ({ children }) => {
+  if (ENV_MISSING) {
+    return <ConfigError />;
+  }
+  return <AuthProviderInternal>{children}</AuthProviderInternal>;
 };
 
 export default AuthContext;
