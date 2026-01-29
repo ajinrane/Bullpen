@@ -1424,11 +1424,11 @@ const JoinWatchlistModal = ({ watchlist, user, profile, onJoin, onCancel }) => {
     try {
       const { error: joinError } = await supabase
         .from('watchlist_members')
-        .insert([{
+        .upsert([{
           watchlist_id: watchlist.id,
           user_id: user.id,
           display_name: displayName.trim()
-        }]);
+        }], { onConflict: 'watchlist_id,user_id' });
 
       if (joinError) {
         setError(joinError.message);
@@ -2329,7 +2329,7 @@ const StockDashboard = () => {
         // Now check if user is a member
         const { data: memberData, error: memberError } = await supabase
           .from('watchlist_members')
-          .select('id, watchlist_id, user_id, display_name, created_at')
+          .select('watchlist_id, user_id, display_name, created_at')
           .eq('watchlist_id', watchlistData.id)
           .eq('user_id', user.id)
           .single();
@@ -2894,7 +2894,7 @@ const StockDashboard = () => {
 
       await supabase
         .from('watchlist_members')
-        .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
+        .upsert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }], { onConflict: 'watchlist_id,user_id' });
 
       // Update URL and state
       watchlistUtils.updateUrl(code);
@@ -3000,7 +3000,7 @@ const StockDashboard = () => {
 
         const { error: joinError } = await supabase
           .from('watchlist_members')
-          .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
+          .upsert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }], { onConflict: 'watchlist_id,user_id' });
 
         if (joinError) {
           console.error('Failed to join watchlist:', joinError);
