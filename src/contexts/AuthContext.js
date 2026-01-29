@@ -8,12 +8,15 @@
 import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Environment variables
+// Environment variables (CRA requires REACT_APP_ prefix)
 const SUPABASE_URL = process.env.REACT_APP_SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.REACT_APP_SUPABASE_ANON_KEY;
 
+// TEMP DEBUG: Check if env vars are loaded (remove after confirming)
+console.log('ENV CHECK', { hasUrl: !!SUPABASE_URL, hasAnon: !!SUPABASE_ANON_KEY });
+
 if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
-  console.error('Missing Supabase environment variables. Check .env.local');
+  console.error('Missing Supabase environment variables. Check .env.local or Vercel env settings.');
 }
 
 // Create Supabase client (singleton)
