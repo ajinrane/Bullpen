@@ -2277,10 +2277,9 @@ const StockDashboard = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Watchlist slug (isolated for mobile deep links)
-  const [watchlistSlug] = useState(() => {
+  const [watchlistSlug, setWatchlistSlug] = useState(() => {
     const urlSearch = typeof window !== 'undefined' ? window.location.search : '';
-    const urlHash = typeof window !== 'undefined' ? window.location.hash : '';
-    return watchlistUtils.parse({ urlSearch, urlHash });
+    return watchlistUtils.parse({ urlSearch });
   });
 
   // Watchlist and membership state
@@ -2289,10 +2288,10 @@ const StockDashboard = () => {
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(false);
 
-  // Update browser URL with slug
-  useEffect(() => {
-    watchlistUtils.updateUrl(watchlistSlug);
-  }, [watchlistSlug]);
+  // Welcome screen state (for when no watchlist is selected)
+  const [newWatchlistName, setNewWatchlistName] = useState('');
+  const [joinCode, setJoinCode] = useState('');
+  const [creatingWatchlist, setCreatingWatchlist] = useState(false);
 
   // Fetch watchlist and membership when user is authenticated
   useEffect(() => {
@@ -2301,48 +2300,23 @@ const StockDashboard = () => {
       return;
     }
 
+    // If no watchlist slug, skip fetching - user needs to pick/create one
+    if (!watchlistSlug) {
+      setMembershipLoading(false);
+      return;
+    }
+
     const fetchMembership = async () => {
       setMembershipLoading(true);
       try {
-        // First, get the watchlist by code/slug
-        let { data: watchlistData, error: watchlistError } = await supabase
+        // Get the watchlist by code/slug
+        const { data: watchlistData, error: watchlistError } = await supabase
           .from('watchlists')
           .select('id, code, name, created_by')
           .eq('code', watchlistSlug)
           .single();
 
-        // If watchlist doesn't exist and it's the default "bullpen", create it
-        if ((watchlistError || !watchlistData) && watchlistSlug === 'bullpen') {
-          console.log('Creating default bullpen watchlist...');
-          const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
-
-          // Create the default watchlist
-          const { data: newWatchlist, error: createError } = await supabase
-            .from('watchlists')
-            .insert([{ code: 'bullpen', name: 'Bullpen', created_by: user.id }])
-            .select()
-            .single();
-
-          if (createError) {
-            // Maybe another user created it at the same time, try fetching again
-            console.log('Create failed, retrying fetch:', createError.message);
-            const { data: retryData } = await supabase
-              .from('watchlists')
-              .select('id, code, name, created_by')
-              .eq('code', 'bullpen')
-              .single();
-            watchlistData = retryData;
-          } else {
-            watchlistData = newWatchlist;
-
-            // Auto-join the creator
-            await supabase
-              .from('watchlist_members')
-              .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
-          }
-        }
-
-        if (!watchlistData) {
+        if (watchlistError || !watchlistData) {
           console.log('Watchlist not found:', watchlistSlug);
           setWatchlist(null);
           setMembership(null);
@@ -2367,6 +2341,8 @@ const StockDashboard = () => {
           setShowJoinModal(true);
         } else {
           setMembership(memberData);
+          // Save to storage for next visit
+          watchlistUtils.saveSlug(watchlistSlug);
         }
       } catch (err) {
         console.error('Error fetching membership:', err);
@@ -2895,16 +2871,121 @@ const StockDashboard = () => {
   }
 
   // Watchlist doesn't exist - show create option
+  // Handler for creating new watchlist from welcome screen
+  const handleCreateNewWatchlist = async () => {
+    if (!user || !supabase || !newWatchlistName.trim()) return;
+    setCreatingWatchlist(true);
+
+    const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+    const code = watchlistUtils.generateCode().toLowerCase();
+
+    try {
+      const { data: newWatchlist, error: createError } = await supabase
+        .from('watchlists')
+        .insert([{ code, name: newWatchlistName.trim(), created_by: user.id }])
+        .select()
+        .single();
+
+      if (createError) {
+        alert('Failed to create watchlist: ' + createError.message);
+        setCreatingWatchlist(false);
+        return;
+      }
+
+      await supabase
+        .from('watchlist_members')
+        .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
+
+      // Update URL and state
+      watchlistUtils.updateUrl(code);
+      watchlistUtils.saveSlug(code);
+      setWatchlistSlug(code);
+      setNewWatchlistName('');
+      setCreatingWatchlist(false);
+    } catch (err) {
+      alert('Error: ' + err.message);
+      setCreatingWatchlist(false);
+    }
+  };
+
+  // Handler for joining existing watchlist from welcome screen
+  const handleJoinByCode = () => {
+    if (!joinCode.trim()) return;
+    const slug = joinCode.trim().toLowerCase();
+    watchlistUtils.updateUrl(slug);
+    setWatchlistSlug(slug);
+    setJoinCode('');
+  };
+
+  // No watchlist slug - show welcome/create screen
+  if (!watchlistSlug) {
+    return (
+      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
+        <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md w-full">
+          <span className="text-5xl mb-4 block">🐂</span>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Bullpen!</h2>
+          <p className="text-slate-500 mb-6">Track stocks and compete with friends.</p>
+
+          <div className="space-y-4">
+            <div>
+              <input
+                type="text"
+                value={newWatchlistName}
+                onChange={(e) => setNewWatchlistName(e.target.value)}
+                placeholder="New watchlist name..."
+                className="w-full px-4 py-3 bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleCreateNewWatchlist}
+                disabled={creatingWatchlist || !newWatchlistName.trim()}
+                className="w-full mt-2 px-6 py-3 text-white font-semibold rounded-xl disabled:opacity-50"
+                style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
+              >
+                {creatingWatchlist ? 'Creating...' : 'Create New Watchlist'}
+              </button>
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-slate-200"></div>
+              </div>
+              <div className="relative flex justify-center text-sm">
+                <span className="px-2 bg-white text-slate-400">or join existing</span>
+              </div>
+            </div>
+
+            <div>
+              <input
+                type="text"
+                value={joinCode}
+                onChange={(e) => setJoinCode(e.target.value)}
+                placeholder="Enter watchlist code..."
+                className="w-full px-4 py-3 bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
+              />
+              <button
+                onClick={handleJoinByCode}
+                disabled={!joinCode.trim()}
+                className="w-full mt-2 px-6 py-3 text-slate-700 font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
+              >
+                Join Watchlist
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // Watchlist slug provided but not found
   if (!watchlist) {
     const handleCreateWatchlist = async () => {
       if (!user || !supabase) return;
 
       const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
-      const code = watchlistSlug === 'bullpen' ? 'bullpen' : watchlistUtils.generateCode().toLowerCase();
-      const name = watchlistSlug === 'bullpen' ? 'Bullpen' : watchlistSlug;
+      const code = watchlistSlug;
+      const name = watchlistSlug.charAt(0).toUpperCase() + watchlistSlug.slice(1);
 
       try {
-        // Create the watchlist
         const { data: newWatchlist, error: createError } = await supabase
           .from('watchlists')
           .insert([{ code, name, created_by: user.id }])
@@ -2917,7 +2998,6 @@ const StockDashboard = () => {
           return;
         }
 
-        // Join as member
         const { error: joinError } = await supabase
           .from('watchlist_members')
           .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
@@ -2928,7 +3008,8 @@ const StockDashboard = () => {
           return;
         }
 
-        // Reload the page to pick up the new watchlist
+        // Save and reload
+        watchlistUtils.saveSlug(watchlistSlug);
         window.location.reload();
       } catch (err) {
         console.error('Error creating watchlist:', err);
@@ -2940,29 +3021,26 @@ const StockDashboard = () => {
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
         <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md">
           <span className="text-5xl mb-4 block">🐂</span>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">
-            {watchlistSlug === 'bullpen' ? 'Welcome to Bullpen!' : 'Watchlist Not Found'}
-          </h2>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">Watchlist Not Found</h2>
           <p className="text-slate-500 mb-4">
-            {watchlistSlug === 'bullpen'
-              ? 'Create the main Bullpen watchlist to get started.'
-              : `The watchlist "${watchlistSlug}" doesn't exist.`}
+            The watchlist "{watchlistSlug}" doesn't exist yet.
           </p>
           <button
             onClick={handleCreateWatchlist}
             className="px-6 py-3 text-white font-semibold rounded-xl w-full mb-3"
             style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
           >
-            {watchlistSlug === 'bullpen' ? 'Create Bullpen' : 'Create This Watchlist'}
+            Create "{watchlistSlug}"
           </button>
-          {watchlistSlug !== 'bullpen' && (
-            <button
-              onClick={() => window.location.href = '/'}
-              className="px-6 py-3 text-slate-600 font-semibold rounded-xl w-full border border-slate-200 hover:bg-slate-50"
-            >
-              Go to Home
-            </button>
-          )}
+          <button
+            onClick={() => {
+              setWatchlistSlug(null);
+              window.history.replaceState({}, '', window.location.pathname);
+            }}
+            className="px-6 py-3 text-slate-600 font-semibold rounded-xl w-full border border-slate-200 hover:bg-slate-50"
+          >
+            Pick Different Watchlist
+          </button>
         </div>
       </div>
     );
