@@ -2895,7 +2895,7 @@ const StockDashboard = () => {
             style={activeTab === 'watchlist' ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
           >
             <Star className="w-4 h-4 inline mr-2" />
-            Watchlist
+            Stock Screener
           </button>
           <button
             onClick={() => setActiveTab('pens')}
@@ -3130,7 +3130,7 @@ const StockDashboard = () => {
             {!activePen ? (
               <PenSelector
                 currentUser={currentUser}
-                onSelectPen={(code, pen) => {
+                onSelectPen={async (code, pen) => {
                   setActivePenCode(code);
                   setActivePen(pen);
                   // Load pen-specific data from localStorage
@@ -3140,10 +3140,14 @@ const StockDashboard = () => {
                   setPenNotes(penData.notes || []);
                   setPenStances(penData.stances || []);
                   setPenActivity(penData.activity || []);
-                  // Add pen symbols to global symbols to fetch data
-                  const newSymbols = (penData.symbols || []).filter(s => !symbols.includes(s));
-                  if (newSymbols.length > 0) {
-                    setSymbols(prev => [...prev, ...newSymbols]);
+                  // Fetch stock data for pen symbols
+                  for (const symbol of (penData.symbols || [])) {
+                    if (!stockData[symbol]) {
+                      const data = await fetchStockDataFn(symbol);
+                      if (data) {
+                        setStockData(prev => ({ ...prev, [symbol]: data }));
+                      }
+                    }
                   }
                 }}
                 onCreatePen={(code, pen) => {
@@ -3238,10 +3242,6 @@ const StockDashboard = () => {
                           if (!penSymbols.includes(symbol)) {
                             const newSymbols = [...penSymbols, symbol];
                             setPenSymbols(newSymbols);
-                            // Also add to global symbols to fetch data
-                            if (!symbols.includes(symbol)) {
-                              setSymbols(prev => [...prev, symbol]);
-                            }
                             const newActivity = [...penActivity, {
                               type: 'stock_added',
                               username: currentUser,
@@ -3253,22 +3253,23 @@ const StockDashboard = () => {
                             // Save to localStorage
                             const penData = { symbols: newSymbols, positions: penPositions, notes: penNotes, stances: penStances, activity: newActivity };
                             localStorage.setItem(`pen-${activePenCode}-data`, JSON.stringify(penData));
+                            // Fetch stock data directly
+                            const data = await fetchStockDataFn(symbol);
+                            if (data) {
+                              setStockData(prev => ({ ...prev, [symbol]: data }));
+                            }
                           }
                           setNewSymbol('');
                         }
                       }}
                     />
                     <button
-                      onClick={() => {
+                      onClick={async () => {
                         if (newSymbol.trim()) {
                           const symbol = newSymbol.trim().toUpperCase();
                           if (!penSymbols.includes(symbol)) {
                             const newSymbols = [...penSymbols, symbol];
                             setPenSymbols(newSymbols);
-                            // Also add to global symbols to fetch data
-                            if (!symbols.includes(symbol)) {
-                              setSymbols(prev => [...prev, symbol]);
-                            }
                             const newActivity = [...penActivity, {
                               type: 'stock_added',
                               username: currentUser,
@@ -3280,6 +3281,11 @@ const StockDashboard = () => {
                             // Save to localStorage
                             const penData = { symbols: newSymbols, positions: penPositions, notes: penNotes, stances: penStances, activity: newActivity };
                             localStorage.setItem(`pen-${activePenCode}-data`, JSON.stringify(penData));
+                            // Fetch stock data directly
+                            const data = await fetchStockDataFn(symbol);
+                            if (data) {
+                              setStockData(prev => ({ ...prev, [symbol]: data }));
+                            }
                           }
                           setNewSymbol('');
                         }
