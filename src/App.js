@@ -2583,8 +2583,8 @@ const StockDashboard = () => {
     };
 
     // Real-time subscriptions using watchlist.id (UUID)
-    const channel = supabase.channel(`watchlist-${watchlistId}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `watchlist_id=eq.${watchlistId}` },
+    const channel = supabase.channel(`watchlist-${watchlist.id}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `watchlist_id=eq.${watchlist.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setNotes(prev => [payload.new, ...prev]);
@@ -2592,7 +2592,7 @@ const StockDashboard = () => {
           }
           else if (payload.eventType === 'DELETE') setNotes(prev => prev.filter(n => n.id !== payload.old.id));
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'positions', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'positions', filter: `watchlist_id=eq.${watchlist.id}` },
         (payload) => {
           // Positions are private - only user's own, so just update local state
           if (payload.eventType === 'INSERT') {
@@ -2601,7 +2601,7 @@ const StockDashboard = () => {
           else if (payload.eventType === 'DELETE') setPositions(prev => prev.filter(p => p.id !== payload.old.id));
           else if (payload.eventType === 'UPDATE') setPositions(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stances', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stances', filter: `watchlist_id=eq.${watchlist.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setStances(prev => [...prev, payload.new]);
@@ -2613,7 +2613,7 @@ const StockDashboard = () => {
             addFeedItem('stance', payload, memberMapRef.current);
           }
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_stocks', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_stocks', filter: `watchlist_id=eq.${watchlist.id}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setSymbols(prev => [...prev, payload.new.symbol]);
@@ -2625,7 +2625,7 @@ const StockDashboard = () => {
             setStockMeta(prev => { const next = { ...prev }; delete next[payload.old.symbol]; return next; });
           }
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_members', filter: `watchlist_id=eq.${watchlistId}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_members', filter: `watchlist_id=eq.${watchlist.id}` },
         (payload) => {
           // Update members list when someone joins/leaves
           if (payload.eventType === 'INSERT') {
