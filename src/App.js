@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, AreaChart, Area, PieChart, Pie, Cell } from 'recharts';
-import { TrendingUp, TrendingDown, Plus, X, RefreshCw, Star, ChevronDown, ChevronUp, AlertCircle, MessageSquare, Send, Trash2, Users, Wifi, WifiOff, DollarSign, Target, ThumbsUp, ThumbsDown, Share2, Copy, Check, Edit3, Minus, LayoutGrid, List, Filter, Sun, Moon, BarChart2, Activity, Bell, BellRing, Newspaper, PieChart as PieChartIcon, Wallet, ExternalLink } from 'lucide-react';
+import { TrendingUp, TrendingDown, Plus, X, RefreshCw, Star, ChevronDown, ChevronUp, AlertCircle, MessageSquare, Send, Trash2, Users, Wifi, WifiOff, DollarSign, Target, ThumbsUp, ThumbsDown, Share2, Copy, Check, Edit3, Minus, LayoutGrid, List, Filter, Sun, Moon, BarChart2, Activity, Bell, BellRing, Newspaper, PieChart as PieChartIcon, Wallet, ExternalLink, Lock, LogIn, UserPlus, Home } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
 // ============================================
@@ -1596,6 +1596,326 @@ const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSecto
   );
 };
 
+// ============================================
+// PEN (GROUP) COMPONENTS
+// ============================================
+
+const generatePenCode = () => {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 6; i++) {
+    code += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return code;
+};
+
+const PenSelector = ({ currentUser, onSelectPen, onCreatePen, theme }) => {
+  const [mode, setMode] = useState('select'); // 'select', 'join', 'create'
+  const [penCode, setPenCode] = useState('');
+  const [penPassword, setPenPassword] = useState('');
+  const [penName, setPenName] = useState('');
+  const [error, setError] = useState('');
+  const [myPens, setMyPens] = useState([]);
+
+  useEffect(() => {
+    // Load user's pens from localStorage
+    const storedPens = JSON.parse(localStorage.getItem('bullpen-pens') || '{}');
+    const userPens = Object.entries(storedPens)
+      .filter(([_, pen]) => pen.members?.includes(currentUser))
+      .map(([code, pen]) => ({ code, ...pen }));
+    setMyPens(userPens);
+  }, [currentUser]);
+
+  const handleJoinPen = () => {
+    const storedPens = JSON.parse(localStorage.getItem('bullpen-pens') || '{}');
+    const pen = storedPens[penCode.toUpperCase()];
+
+    if (!pen) {
+      setError('Pen not found. Check the code and try again.');
+      return;
+    }
+    if (pen.password !== penPassword) {
+      setError('Incorrect password.');
+      return;
+    }
+
+    // Add user to pen
+    if (!pen.members.includes(currentUser)) {
+      pen.members.push(currentUser);
+      storedPens[penCode.toUpperCase()] = pen;
+      localStorage.setItem('bullpen-pens', JSON.stringify(storedPens));
+    }
+
+    onSelectPen(penCode.toUpperCase(), pen);
+  };
+
+  const handleCreatePen = () => {
+    if (!penName.trim() || !penPassword.trim()) {
+      setError('Please enter a pen name and password.');
+      return;
+    }
+
+    const code = generatePenCode();
+    const newPen = {
+      name: penName.trim(),
+      password: penPassword,
+      creator: currentUser,
+      members: [currentUser],
+      created_at: new Date().toISOString()
+    };
+
+    const storedPens = JSON.parse(localStorage.getItem('bullpen-pens') || '{}');
+    storedPens[code] = newPen;
+    localStorage.setItem('bullpen-pens', JSON.stringify(storedPens));
+
+    onCreatePen(code, newPen);
+  };
+
+  return (
+    <div className={`rounded-xl p-6 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <h2 className={`text-xl font-bold mb-4 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+        <Home className="w-5 h-5" /> Your Pens
+      </h2>
+
+      {/* List of user's pens */}
+      {myPens.length > 0 && mode === 'select' && (
+        <div className="space-y-2 mb-4">
+          {myPens.map(pen => (
+            <button
+              key={pen.code}
+              onClick={() => onSelectPen(pen.code, pen)}
+              className={`w-full p-4 rounded-lg text-left transition-all flex justify-between items-center ${theme === 'dark' ? 'bg-slate-700 hover:bg-slate-600' : 'bg-slate-50 hover:bg-slate-100'}`}
+            >
+              <div>
+                <div className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{pen.name}</div>
+                <div className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+                  {pen.members?.length || 1} member{(pen.members?.length || 1) !== 1 ? 's' : ''} · Code: {pen.code}
+                </div>
+              </div>
+              <ChevronDown className={`w-5 h-5 rotate-[-90deg] ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`} />
+            </button>
+          ))}
+        </div>
+      )}
+
+      {mode === 'select' && (
+        <div className="flex gap-2">
+          <button
+            onClick={() => setMode('join')}
+            className="flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all text-white"
+            style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
+          >
+            <LogIn className="w-4 h-4" /> Join a Pen
+          </button>
+          <button
+            onClick={() => setMode('create')}
+            className="flex-1 py-3 rounded-xl font-medium flex items-center justify-center gap-2 transition-all text-white"
+            style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
+          >
+            <UserPlus className="w-4 h-4" /> Create Pen
+          </button>
+        </div>
+      )}
+
+      {mode === 'join' && (
+        <div className="space-y-3">
+          <div>
+            <label className={`block text-sm mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Pen Code</label>
+            <input
+              type="text"
+              value={penCode}
+              onChange={(e) => { setPenCode(e.target.value.toUpperCase()); setError(''); }}
+              placeholder="Enter 6-character code"
+              maxLength={6}
+              className={`w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+            />
+          </div>
+          <div>
+            <label className={`block text-sm mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Password</label>
+            <input
+              type="password"
+              value={penPassword}
+              onChange={(e) => { setPenPassword(e.target.value); setError(''); }}
+              placeholder="Enter pen password"
+              className={`w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => { setMode('select'); setError(''); }} className={`px-4 py-2 rounded-lg ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+              Back
+            </button>
+            <button
+              onClick={handleJoinPen}
+              disabled={!penCode.trim() || !penPassword.trim()}
+              className="flex-1 py-2 rounded-lg font-medium text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
+            >
+              Join Pen
+            </button>
+          </div>
+        </div>
+      )}
+
+      {mode === 'create' && (
+        <div className="space-y-3">
+          <div>
+            <label className={`block text-sm mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Pen Name</label>
+            <input
+              type="text"
+              value={penName}
+              onChange={(e) => { setPenName(e.target.value); setError(''); }}
+              placeholder="e.g., Investment Club"
+              className={`w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+            />
+          </div>
+          <div>
+            <label className={`block text-sm mb-1 ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Password (for others to join)</label>
+            <input
+              type="password"
+              value={penPassword}
+              onChange={(e) => { setPenPassword(e.target.value); setError(''); }}
+              placeholder="Create a password"
+              className={`w-full px-4 py-3 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+            />
+          </div>
+          {error && <p className="text-red-500 text-sm">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={() => { setMode('select'); setError(''); }} className={`px-4 py-2 rounded-lg ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-200 text-slate-600'}`}>
+              Back
+            </button>
+            <button
+              onClick={handleCreatePen}
+              disabled={!penName.trim() || !penPassword.trim()}
+              className="flex-1 py-2 rounded-lg font-medium text-white disabled:opacity-50"
+              style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
+            >
+              Create Pen
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+const PenHeader = ({ pen, penCode, onLeavePen, onCopyCode, theme }) => {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(penCode);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+    onCopyCode?.();
+  };
+
+  return (
+    <div className={`rounded-xl p-4 mb-4 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <div className="flex justify-between items-center">
+        <div>
+          <h2 className={`text-xl font-bold flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+            🐂 {pen.name}
+          </h2>
+          <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
+            {pen.members?.length || 1} member{(pen.members?.length || 1) !== 1 ? 's' : ''}
+          </p>
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleCopy}
+            className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}
+          >
+            {copied ? <Check className="w-4 h-4 text-green-500" /> : <Copy className="w-4 h-4" />}
+            {penCode}
+          </button>
+          <button
+            onClick={onLeavePen}
+            className={`px-3 py-2 rounded-lg text-sm ${theme === 'dark' ? 'bg-slate-700 text-slate-400 hover:text-red-400' : 'bg-slate-100 text-slate-500 hover:text-red-500'}`}
+          >
+            Leave
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+};
+
+const PenActivityFeed = ({ activities, currentUser, theme }) => {
+  const formatTimeAgo = (date) => {
+    const seconds = Math.floor((new Date() - new Date(date)) / 1000);
+    if (seconds < 60) return 'just now';
+    const minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h ago`;
+    const days = Math.floor(hours / 24);
+    return `${days}d ago`;
+  };
+
+  const getActivityIcon = (type) => {
+    switch (type) {
+      case 'position': return <DollarSign className="w-4 h-4" />;
+      case 'note': return <MessageSquare className="w-4 h-4" />;
+      case 'stance': return <Target className="w-4 h-4" />;
+      case 'stock_added': return <Plus className="w-4 h-4" />;
+      default: return <Activity className="w-4 h-4" />;
+    }
+  };
+
+  const getActivityColor = (type) => {
+    switch (type) {
+      case 'position': return 'bg-green-500/20 text-green-500';
+      case 'note': return 'bg-blue-500/20 text-blue-500';
+      case 'stance': return 'bg-purple-500/20 text-purple-500';
+      case 'stock_added': return 'bg-cyan-500/20 text-cyan-500';
+      default: return 'bg-slate-500/20 text-slate-400';
+    }
+  };
+
+  return (
+    <div className={`rounded-xl p-4 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+      <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+        <Activity className="w-5 h-5" /> Activity Feed
+      </h3>
+
+      {activities.length === 0 ? (
+        <p className={`text-center py-6 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+          No activity yet. Add stocks and positions to see the feed!
+        </p>
+      ) : (
+        <div className="space-y-2 max-h-64 overflow-y-auto">
+          {activities.slice(0, 20).map((item, idx) => {
+            const color = getUserColor(item.username);
+            return (
+              <div key={idx} className={`flex items-start gap-3 p-2 rounded-lg ${theme === 'dark' ? 'hover:bg-slate-700' : 'hover:bg-slate-50'}`}>
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${getActivityColor(item.type)}`}>
+                  {getActivityIcon(item.type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <span className={`font-medium ${color.text}`}>{item.username}</span>
+                    <span className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      {formatTimeAgo(item.created_at)}
+                    </span>
+                  </div>
+                  <p className={`text-sm truncate ${theme === 'dark' ? 'text-slate-400' : 'text-slate-600'}`}>
+                    {item.description}
+                  </p>
+                </div>
+                {item.symbol && (
+                  <span className={`text-xs font-medium px-2 py-1 rounded ${theme === 'dark' ? 'bg-slate-700 text-slate-300' : 'bg-slate-100 text-slate-600'}`}>
+                    {item.symbol}
+                  </span>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+};
+
 // Help/Info Modal
 const HelpModal = ({ onClose, theme }) => {
   const [activeTab, setActiveTab] = useState('how');
@@ -2035,11 +2355,14 @@ const StockDashboard = () => {
   const [feedItems, setFeedItems] = useState([]);
   const [showFeed, setShowFeed] = useState(false);
 
-  // New feature panel states
-  const [showNewsFeed, setShowNewsFeed] = useState(false);
-  const [showSectorAllocation, setShowSectorAllocation] = useState(false);
-  const [showPortfolioValue, setShowPortfolioValue] = useState(false);
-  const [showPriceAlerts, setShowPriceAlerts] = useState(false);
+  // Pen (group) state
+  const [activePen, setActivePen] = useState(null);
+  const [activePenCode, setActivePenCode] = useState(null);
+  const [penPositions, setPenPositions] = useState([]);
+  const [penNotes, setPenNotes] = useState([]);
+  const [penStances, setPenStances] = useState([]);
+  const [penActivity, setPenActivity] = useState([]);
+  const [penSymbols, setPenSymbols] = useState([]);
 
   const allUsers = useMemo(() => {
     const users = new Set();
@@ -2501,14 +2824,16 @@ const StockDashboard = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
-              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Stock Watchlist</h1>
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-3xl md:text-4xl">🐂</span>
+              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Bullpen</h1>
               <span className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full font-medium ${isConnected ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`} style={{ boxShadow: isConnected ? '0 0 8px rgba(52,199,89,0.5)' : 'none' }}></span>
                 {isConnected ? 'Live' : 'Offline'}
               </span>
             </div>
-            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
+            <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>Track stocks. Compete with friends.</p>
+            <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -2555,10 +2880,10 @@ const StockDashboard = () => {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-2 mb-6">
+        <div className="flex gap-2 mb-6 flex-wrap">
           <button
             onClick={() => setActiveTab('leaderboard')}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${activeTab === 'leaderboard' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
+            className={`px-5 py-2.5 rounded-xl font-semibold transition-all ${activeTab === 'leaderboard' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
             style={activeTab === 'leaderboard' ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
           >
             <Users className="w-4 h-4 inline mr-2" />
@@ -2566,11 +2891,19 @@ const StockDashboard = () => {
           </button>
           <button
             onClick={() => setActiveTab('watchlist')}
-            className={`px-6 py-3 rounded-xl font-semibold transition-all ${activeTab === 'watchlist' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
+            className={`px-5 py-2.5 rounded-xl font-semibold transition-all ${activeTab === 'watchlist' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
             style={activeTab === 'watchlist' ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 15px rgba(0,122,255,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
           >
             <Star className="w-4 h-4 inline mr-2" />
             Watchlist
+          </button>
+          <button
+            onClick={() => setActiveTab('pens')}
+            className={`px-5 py-2.5 rounded-xl font-semibold transition-all ${activeTab === 'pens' ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-400 hover:text-white' : 'text-slate-600 hover:text-slate-800'}`}
+            style={activeTab === 'pens' ? { background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)', boxShadow: '0 4px 15px rgba(52,199,89,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.5)' : 'rgba(255,255,255,0.8)', border: '1px solid rgba(0,0,0,0.06)' }}
+          >
+            <Home className="w-4 h-4 inline mr-2" />
+            Pens
           </button>
         </div>
 
@@ -2583,16 +2916,6 @@ const StockDashboard = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
-        )}
-
-        {/* Social Feed - shows on both tabs */}
-        {showFeed && (
-          <SocialFeed
-            feedItems={feedItems}
-            currentUser={currentUser}
-            theme={theme}
-            onClose={() => setShowFeed(false)}
-          />
         )}
 
         {/* LEADERBOARD TAB */}
@@ -2873,6 +3196,208 @@ const StockDashboard = () => {
               </div>
             )}
           </>
+        )}
+
+        {/* PENS TAB */}
+        {activeTab === 'pens' && (
+          <div className="space-y-4">
+            {!activePen ? (
+              <PenSelector
+                currentUser={currentUser}
+                onSelectPen={(code, pen) => {
+                  setActivePenCode(code);
+                  setActivePen(pen);
+                  // Load pen-specific data from localStorage
+                  const penData = JSON.parse(localStorage.getItem(`pen-${code}-data`) || '{"symbols":[],"positions":[],"notes":[],"stances":[],"activity":[]}');
+                  setPenSymbols(penData.symbols || []);
+                  setPenPositions(penData.positions || []);
+                  setPenNotes(penData.notes || []);
+                  setPenStances(penData.stances || []);
+                  setPenActivity(penData.activity || []);
+                }}
+                onCreatePen={(code, pen) => {
+                  setActivePenCode(code);
+                  setActivePen(pen);
+                  setPenSymbols([]);
+                  setPenPositions([]);
+                  setPenNotes([]);
+                  setPenStances([]);
+                  setPenActivity([{
+                    type: 'stock_added',
+                    username: currentUser,
+                    description: `Created the pen "${pen.name}"`,
+                    created_at: new Date().toISOString()
+                  }]);
+                }}
+                theme={theme}
+              />
+            ) : (
+              <>
+                <PenHeader
+                  pen={activePen}
+                  penCode={activePenCode}
+                  onLeavePen={() => {
+                    setActivePen(null);
+                    setActivePenCode(null);
+                  }}
+                  theme={theme}
+                />
+
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+                  {/* Pen Leaderboard */}
+                  <div className={`rounded-xl p-4 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+                    <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                      <Users className="w-5 h-5" /> Pen Leaderboard
+                    </h3>
+                    {activePen.members?.length > 0 ? (
+                      <div className="space-y-2">
+                        {activePen.members.map((member, idx) => {
+                          const color = getUserColor(member);
+                          const memberPositions = penPositions.filter(p => p.username === member);
+                          let totalPnL = 0;
+                          memberPositions.forEach(pos => {
+                            const stock = stockData[pos.symbol];
+                            if (stock) {
+                              totalPnL += (stock.price - pos.buy_price) * pos.shares;
+                            }
+                          });
+                          return (
+                            <div key={member} className={`flex items-center justify-between p-3 rounded-lg ${member === currentUser ? 'ring-2 ring-blue-500' : ''} ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-50'}`}>
+                              <div className="flex items-center gap-2">
+                                <span className="font-bold text-lg w-6">{idx === 0 ? '🥇' : idx === 1 ? '🥈' : idx === 2 ? '🥉' : `#${idx + 1}`}</span>
+                                <UserAvatar username={member} size="sm" />
+                                <span className={`font-medium ${color.text}`}>{member}</span>
+                              </div>
+                              <span className={`font-bold ${totalPnL >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+                                {totalPnL >= 0 ? '+' : ''}${totalPnL.toFixed(2)}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <p className={`text-center py-4 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>No members yet</p>
+                    )}
+                  </div>
+
+                  {/* Pen Activity Feed */}
+                  <div className="lg:col-span-2">
+                    <PenActivityFeed activities={penActivity} currentUser={currentUser} theme={theme} />
+                  </div>
+                </div>
+
+                {/* Pen Watchlist */}
+                <div className={`rounded-xl p-4 ${theme === 'dark' ? 'bg-slate-800' : 'bg-white shadow-lg'}`}>
+                  <h3 className={`text-lg font-bold mb-3 flex items-center gap-2 ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>
+                    <Star className="w-5 h-5" /> Pen Watchlist
+                  </h3>
+
+                  {/* Add stock to pen */}
+                  <div className="flex gap-2 mb-4">
+                    <input
+                      type="text"
+                      value={newSymbol}
+                      onChange={(e) => setNewSymbol(e.target.value.toUpperCase())}
+                      placeholder="Add ticker (e.g., AAPL)"
+                      className={`flex-1 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
+                      maxLength={5}
+                      onKeyPress={(e) => {
+                        if (e.key === 'Enter' && newSymbol.trim()) {
+                          const symbol = newSymbol.trim().toUpperCase();
+                          if (!penSymbols.includes(symbol)) {
+                            const newSymbols = [...penSymbols, symbol];
+                            setPenSymbols(newSymbols);
+                            const newActivity = [...penActivity, {
+                              type: 'stock_added',
+                              username: currentUser,
+                              symbol: symbol,
+                              description: `Added ${symbol} to the watchlist`,
+                              created_at: new Date().toISOString()
+                            }];
+                            setPenActivity(newActivity);
+                            // Save to localStorage
+                            const penData = { symbols: newSymbols, positions: penPositions, notes: penNotes, stances: penStances, activity: newActivity };
+                            localStorage.setItem(`pen-${activePenCode}-data`, JSON.stringify(penData));
+                          }
+                          setNewSymbol('');
+                        }
+                      }}
+                    />
+                    <button
+                      onClick={() => {
+                        if (newSymbol.trim()) {
+                          const symbol = newSymbol.trim().toUpperCase();
+                          if (!penSymbols.includes(symbol)) {
+                            const newSymbols = [...penSymbols, symbol];
+                            setPenSymbols(newSymbols);
+                            const newActivity = [...penActivity, {
+                              type: 'stock_added',
+                              username: currentUser,
+                              symbol: symbol,
+                              description: `Added ${symbol} to the watchlist`,
+                              created_at: new Date().toISOString()
+                            }];
+                            setPenActivity(newActivity);
+                            // Save to localStorage
+                            const penData = { symbols: newSymbols, positions: penPositions, notes: penNotes, stances: penStances, activity: newActivity };
+                            localStorage.setItem(`pen-${activePenCode}-data`, JSON.stringify(penData));
+                          }
+                          setNewSymbol('');
+                        }
+                      }}
+                      disabled={!newSymbol.trim()}
+                      className="px-4 py-2 text-white rounded-lg font-medium disabled:opacity-50"
+                      style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
+                    >
+                      <Plus className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  {/* Pen stocks grid */}
+                  {penSymbols.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                      {penSymbols.map(symbol => {
+                        const stock = stockData[symbol];
+                        if (!stock) return (
+                          <div key={symbol} className={`p-3 rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-50'}`}>
+                            <span className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{symbol}</span>
+                            <p className={`text-sm ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>Loading...</p>
+                          </div>
+                        );
+                        const isPositive = (stock.change || 0) >= 0;
+                        return (
+                          <div key={symbol} className={`p-3 rounded-lg ${theme === 'dark' ? 'bg-slate-700' : 'bg-slate-50'}`}>
+                            <div className="flex justify-between items-start mb-1">
+                              <span className={`font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{symbol}</span>
+                              <button
+                                onClick={() => {
+                                  const newSymbols = penSymbols.filter(s => s !== symbol);
+                                  setPenSymbols(newSymbols);
+                                  const penData = { symbols: newSymbols, positions: penPositions, notes: penNotes, stances: penStances, activity: penActivity };
+                                  localStorage.setItem(`pen-${activePenCode}-data`, JSON.stringify(penData));
+                                }}
+                                className={`text-xs ${theme === 'dark' ? 'text-slate-400 hover:text-red-400' : 'text-slate-500 hover:text-red-500'}`}
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </div>
+                            <div className={`text-lg font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>${stock.price?.toFixed(2)}</div>
+                            <div className={`text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+                              {isPositive ? '+' : ''}{stock.changePercent?.toFixed(2)}%
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <p className={`text-center py-8 ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>
+                      No stocks in this pen yet. Add some tickers above!
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+          </div>
         )}
 
       </div>
