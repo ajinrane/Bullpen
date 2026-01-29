@@ -2896,19 +2896,73 @@ const StockDashboard = () => {
 
   // Watchlist doesn't exist - show create option
   if (!watchlist) {
+    const handleCreateWatchlist = async () => {
+      if (!user || !supabase) return;
+
+      const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+      const code = watchlistSlug === 'bullpen' ? 'bullpen' : watchlistUtils.generateCode().toLowerCase();
+      const name = watchlistSlug === 'bullpen' ? 'Bullpen' : watchlistSlug;
+
+      try {
+        // Create the watchlist
+        const { data: newWatchlist, error: createError } = await supabase
+          .from('watchlists')
+          .insert([{ code, name, created_by: user.id }])
+          .select()
+          .single();
+
+        if (createError) {
+          console.error('Failed to create watchlist:', createError);
+          alert('Failed to create watchlist: ' + createError.message);
+          return;
+        }
+
+        // Join as member
+        const { error: joinError } = await supabase
+          .from('watchlist_members')
+          .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
+
+        if (joinError) {
+          console.error('Failed to join watchlist:', joinError);
+          alert('Failed to join watchlist: ' + joinError.message);
+          return;
+        }
+
+        // Reload the page to pick up the new watchlist
+        window.location.reload();
+      } catch (err) {
+        console.error('Error creating watchlist:', err);
+        alert('Error: ' + err.message);
+      }
+    };
+
     return (
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
         <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md">
           <span className="text-5xl mb-4 block">🐂</span>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Watchlist Not Found</h2>
-          <p className="text-slate-500 mb-4">The watchlist "{watchlistSlug}" doesn't exist.</p>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">
+            {watchlistSlug === 'bullpen' ? 'Welcome to Bullpen!' : 'Watchlist Not Found'}
+          </h2>
+          <p className="text-slate-500 mb-4">
+            {watchlistSlug === 'bullpen'
+              ? 'Create the main Bullpen watchlist to get started.'
+              : `The watchlist "${watchlistSlug}" doesn't exist.`}
+          </p>
           <button
-            onClick={() => window.location.href = '/'}
-            className="px-6 py-3 text-white font-semibold rounded-xl"
-            style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
+            onClick={handleCreateWatchlist}
+            className="px-6 py-3 text-white font-semibold rounded-xl w-full mb-3"
+            style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
           >
-            Go to Home
+            {watchlistSlug === 'bullpen' ? 'Create Bullpen' : 'Create This Watchlist'}
           </button>
+          {watchlistSlug !== 'bullpen' && (
+            <button
+              onClick={() => window.location.href = '/'}
+              className="px-6 py-3 text-slate-600 font-semibold rounded-xl w-full border border-slate-200 hover:bg-slate-50"
+            >
+              Go to Home
+            </button>
+          )}
         </div>
       </div>
     );
