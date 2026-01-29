@@ -2305,14 +2305,44 @@ const StockDashboard = () => {
       setMembershipLoading(true);
       try {
         // First, get the watchlist by code/slug
-        const { data: watchlistData, error: watchlistError } = await supabase
+        let { data: watchlistData, error: watchlistError } = await supabase
           .from('watchlists')
           .select('id, code, name, created_by')
           .eq('code', watchlistSlug)
           .single();
 
-        if (watchlistError || !watchlistData) {
-          // Watchlist doesn't exist - will need to create or show error
+        // If watchlist doesn't exist and it's the default "bullpen", create it
+        if ((watchlistError || !watchlistData) && watchlistSlug === 'bullpen') {
+          console.log('Creating default bullpen watchlist...');
+          const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+
+          // Create the default watchlist
+          const { data: newWatchlist, error: createError } = await supabase
+            .from('watchlists')
+            .insert([{ code: 'bullpen', name: 'Bullpen', created_by: user.id }])
+            .select()
+            .single();
+
+          if (createError) {
+            // Maybe another user created it at the same time, try fetching again
+            console.log('Create failed, retrying fetch:', createError.message);
+            const { data: retryData } = await supabase
+              .from('watchlists')
+              .select('id, code, name, created_by')
+              .eq('code', 'bullpen')
+              .single();
+            watchlistData = retryData;
+          } else {
+            watchlistData = newWatchlist;
+
+            // Auto-join the creator
+            await supabase
+              .from('watchlist_members')
+              .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
+          }
+        }
+
+        if (!watchlistData) {
           console.log('Watchlist not found:', watchlistSlug);
           setWatchlist(null);
           setMembership(null);
@@ -2346,7 +2376,7 @@ const StockDashboard = () => {
     };
 
     fetchMembership();
-  }, [user, watchlistSlug]);
+  }, [user, watchlistSlug, profile]);
 
   // Current user display name from membership (not profile)
   const currentUser = membership?.display_name || profile?.display_name || profile?.username || user?.email?.split('@')[0] || '';
