@@ -13,8 +13,10 @@ import watchlistUtils from './utils/watchlist';
 // ============================================
 const FINNHUB_API_KEY = process.env.REACT_APP_FINNHUB_API_KEY;
 
-if (!FINNHUB_API_KEY) {
-  console.warn('Missing REACT_APP_FINNHUB_API_KEY environment variable');
+if (!FINNHUB_API_KEY && process.env.NODE_ENV === 'production') {
+  console.error('[Bullpen] REACT_APP_FINNHUB_API_KEY is not set. Stock data will use mock values. Add this environment variable in Vercel → Settings → Environment Variables.');
+} else if (!FINNHUB_API_KEY) {
+  console.warn('[Bullpen] REACT_APP_FINNHUB_API_KEY is not set. Stock data will use mock values.');
 }
 // ============================================
 
@@ -45,9 +47,27 @@ const generateWatchlistId = () => Math.random().toString(36).substring(2, 10);
 // FINNHUB API
 // ============================================
 
+// Custom error for API rate limits / auth issues
+class APILimitError extends Error {
+  constructor(status) {
+    super(`API limit or auth error: ${status}`);
+    this.status = status;
+    this.name = 'APILimitError';
+  }
+}
+
 const fetchFinnhub = async (endpoint) => {
+  if (!FINNHUB_API_KEY) {
+    throw new APILimitError(401); // No key configured
+  }
   const url = `https://finnhub.io/api/v1${endpoint}&token=${FINNHUB_API_KEY}`;
   const response = await fetch(url);
+
+  // Handle rate limit and auth errors gracefully
+  if (response.status === 403 || response.status === 429 || response.status === 401) {
+    throw new APILimitError(response.status);
+  }
+
   if (!response.ok) throw new Error(`API Error: ${response.status}`);
   return response.json();
 };
@@ -58,12 +78,12 @@ const fetchStockQuote = async (symbol) => {
       fetchFinnhub(`/quote?symbol=${symbol}`),
       fetchFinnhub(`/stock/profile2?symbol=${symbol}`).catch(() => null)
     ]);
-    
+
     if (!quote || quote.c === 0) {
       console.error(`No data for ${symbol}`);
       return null;
     }
-    
+
     return {
       symbol,
       shortName: profile?.name || symbol,
@@ -91,8 +111,43 @@ const fetchStockQuote = async (symbol) => {
       recommendationKey: null,
       recommendationMean: null,
       numberOfAnalystOpinions: 0,
+      apiWarning: null,
     };
   } catch (error) {
+    // For API limit errors, return mock data with warning
+    if (error.name === 'APILimitError') {
+      console.warn(`[Bullpen] API limit for ${symbol}, using mock data`);
+      const mockPrice = 100 + Math.random() * 200;
+      return {
+        symbol,
+        shortName: symbol,
+        longName: symbol,
+        price: mockPrice,
+        change: (Math.random() - 0.5) * 10,
+        changePercent: (Math.random() - 0.5) * 5,
+        previousClose: mockPrice * 0.99,
+        dayHigh: mockPrice * 1.02,
+        dayLow: mockPrice * 0.98,
+        open: mockPrice * 0.995,
+        yearHigh: mockPrice * 1.2,
+        yearLow: mockPrice * 0.8,
+        marketCap: null,
+        sector: null,
+        industry: null,
+        logo: null,
+        pe: null,
+        eps: null,
+        dividend: null,
+        beta: null,
+        targetMeanPrice: null,
+        targetHighPrice: null,
+        targetLowPrice: null,
+        recommendationKey: null,
+        recommendationMean: null,
+        numberOfAnalystOpinions: 0,
+        apiWarning: 'API limit reached - showing demo data',
+      };
+    }
     console.error(`Error fetching quote for ${symbol}:`, error);
     return null;
   }
@@ -117,6 +172,11 @@ const fetchHistoricalData = async (symbol, currentPrice = 150) => {
 
     return history.length > 0 ? history : generateMockHistory(symbol, currentPrice);
   } catch (error) {
+    // For API limit errors, silently fall back to mock data
+    if (error.name === 'APILimitError') {
+      console.warn(`[Bullpen] API limit for ${symbol} history, using mock data`);
+      return generateMockHistory(symbol, currentPrice);
+    }
     console.error(`Error fetching history for ${symbol}:`, error);
     return generateMockHistory(symbol, currentPrice);
   }
@@ -1424,11 +1484,11 @@ const JoinWatchlistModal = ({ watchlist, user, profile, onJoin, onCancel }) => {
     try {
       const { error: joinError } = await supabase
         .from('watchlist_members')
-        .upsert([{
+        .insert([{
           watchlist_id: watchlist.id,
           user_id: user.id,
           display_name: displayName.trim()
-        }], { onConflict: 'watchlist_id,user_id' });
+        }]);
 
       if (joinError) {
         setError(joinError.message);
@@ -2184,6 +2244,12 @@ const StockCard = ({
               {isPositive ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
             </span>
           </div>
+          {stock.apiWarning && (
+            <div className="flex items-center gap-1.5 mt-2 px-2 py-1 bg-amber-50 text-amber-600 rounded-lg text-xs">
+              <AlertCircle className="w-3 h-3" />
+              {stock.apiWarning}
+            </div>
+          )}
         </div>
 
         {myPosition && (
@@ -2277,9 +2343,10 @@ const StockDashboard = () => {
   const [showAuthModal, setShowAuthModal] = useState(false);
 
   // Watchlist slug (isolated for mobile deep links)
-  const [watchlistSlug, setWatchlistSlug] = useState(() => {
+  const [watchlistSlug] = useState(() => {
     const urlSearch = typeof window !== 'undefined' ? window.location.search : '';
-    return watchlistUtils.parse({ urlSearch });
+    const urlHash = typeof window !== 'undefined' ? window.location.hash : '';
+    return watchlistUtils.parse({ urlSearch, urlHash });
   });
 
   // Watchlist and membership state
@@ -2288,10 +2355,10 @@ const StockDashboard = () => {
   const [membershipLoading, setMembershipLoading] = useState(true);
   const [showJoinModal, setShowJoinModal] = useState(false);
 
-  // Welcome screen state (for when no watchlist is selected)
-  const [newWatchlistName, setNewWatchlistName] = useState('');
-  const [joinCode, setJoinCode] = useState('');
-  const [creatingWatchlist, setCreatingWatchlist] = useState(false);
+  // Update browser URL with slug
+  useEffect(() => {
+    watchlistUtils.updateUrl(watchlistSlug);
+  }, [watchlistSlug]);
 
   // Fetch watchlist and membership when user is authenticated
   useEffect(() => {
@@ -2300,23 +2367,48 @@ const StockDashboard = () => {
       return;
     }
 
-    // If no watchlist slug, skip fetching - user needs to pick/create one
-    if (!watchlistSlug) {
-      setMembershipLoading(false);
-      return;
-    }
-
     const fetchMembership = async () => {
       setMembershipLoading(true);
       try {
-        // Get the watchlist by code/slug
-        const { data: watchlistData, error: watchlistError } = await supabase
+        // First, get the watchlist by code/slug
+        let { data: watchlistData, error: watchlistError } = await supabase
           .from('watchlists')
           .select('id, code, name, created_by')
           .eq('code', watchlistSlug)
           .single();
 
-        if (watchlistError || !watchlistData) {
+        // If watchlist doesn't exist and it's the default "bullpen", create it
+        if ((watchlistError || !watchlistData) && watchlistSlug === 'bullpen') {
+          console.log('Creating default bullpen watchlist...');
+          const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
+
+          // Create the default watchlist
+          const { data: newWatchlist, error: createError } = await supabase
+            .from('watchlists')
+            .insert([{ code: 'bullpen', name: 'Bullpen', created_by: user.id }])
+            .select()
+            .single();
+
+          if (createError) {
+            // Maybe another user created it at the same time, try fetching again
+            console.log('Create failed, retrying fetch:', createError.message);
+            const { data: retryData } = await supabase
+              .from('watchlists')
+              .select('id, code, name, created_by')
+              .eq('code', 'bullpen')
+              .single();
+            watchlistData = retryData;
+          } else {
+            watchlistData = newWatchlist;
+
+            // Auto-join the creator
+            await supabase
+              .from('watchlist_members')
+              .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
+          }
+        }
+
+        if (!watchlistData) {
           console.log('Watchlist not found:', watchlistSlug);
           setWatchlist(null);
           setMembership(null);
@@ -2329,7 +2421,7 @@ const StockDashboard = () => {
         // Now check if user is a member
         const { data: memberData, error: memberError } = await supabase
           .from('watchlist_members')
-          .select('watchlist_id, user_id, display_name, created_at')
+          .select('id, watchlist_id, user_id, display_name, created_at')
           .eq('watchlist_id', watchlistData.id)
           .eq('user_id', user.id)
           .single();
@@ -2341,8 +2433,6 @@ const StockDashboard = () => {
           setShowJoinModal(true);
         } else {
           setMembership(memberData);
-          // Save to storage for next visit
-          watchlistUtils.saveSlug(watchlistSlug);
         }
       } catch (err) {
         console.error('Error fetching membership:', err);
@@ -2393,7 +2483,6 @@ const StockDashboard = () => {
   const [notes, setNotes] = useState([]);
   const [positions, setPositions] = useState([]); // Private - only user's own via RLS
   const [stances, setStances] = useState([]);
-  const [votes, setVotes] = useState([]); // Voting feature (stub for now)
   const [members, setMembers] = useState([]); // All watchlist members for display name lookup
 
   // Member lookup map: user_id -> display_name
@@ -2584,8 +2673,8 @@ const StockDashboard = () => {
     };
 
     // Real-time subscriptions using watchlist.id (UUID)
-    const channel = supabase.channel(`watchlist-${watchlist.id}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `watchlist_id=eq.${watchlist.id}` },
+    const channel = supabase.channel(`watchlist-${watchlistId}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'notes', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setNotes(prev => [payload.new, ...prev]);
@@ -2593,7 +2682,7 @@ const StockDashboard = () => {
           }
           else if (payload.eventType === 'DELETE') setNotes(prev => prev.filter(n => n.id !== payload.old.id));
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'positions', filter: `watchlist_id=eq.${watchlist.id}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'positions', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           // Positions are private - only user's own, so just update local state
           if (payload.eventType === 'INSERT') {
@@ -2602,7 +2691,7 @@ const StockDashboard = () => {
           else if (payload.eventType === 'DELETE') setPositions(prev => prev.filter(p => p.id !== payload.old.id));
           else if (payload.eventType === 'UPDATE') setPositions(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'stances', filter: `watchlist_id=eq.${watchlist.id}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'stances', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setStances(prev => [...prev, payload.new]);
@@ -2614,7 +2703,7 @@ const StockDashboard = () => {
             addFeedItem('stance', payload, memberMapRef.current);
           }
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_stocks', filter: `watchlist_id=eq.${watchlist.id}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_stocks', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           if (payload.eventType === 'INSERT') {
             setSymbols(prev => [...prev, payload.new.symbol]);
@@ -2626,7 +2715,7 @@ const StockDashboard = () => {
             setStockMeta(prev => { const next = { ...prev }; delete next[payload.old.symbol]; return next; });
           }
         })
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_members', filter: `watchlist_id=eq.${watchlist.id}` },
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'watchlist_members', filter: `watchlist_id=eq.${watchlistId}` },
         (payload) => {
           // Update members list when someone joins/leaves
           if (payload.eventType === 'INSERT') {
@@ -2671,12 +2760,6 @@ const StockDashboard = () => {
     } else if (stance && stance !== 'neutral') {
       await supabase.from('stances').insert([{ watchlist_id: watchlist.id, symbol, stance, user_id: user.id }]);
     }
-  };
-
-  // Voting handler (stub - voting feature not yet implemented in DB)
-  const handleVote = async (symbol, voteType) => {
-    // TODO: Implement voting when votes table is added to Supabase
-    console.log('Vote feature not yet implemented:', symbol, voteType);
   };
 
   // Fetch stock data
@@ -2878,121 +2961,16 @@ const StockDashboard = () => {
   }
 
   // Watchlist doesn't exist - show create option
-  // Handler for creating new watchlist from welcome screen
-  const handleCreateNewWatchlist = async () => {
-    if (!user || !supabase || !newWatchlistName.trim()) return;
-    setCreatingWatchlist(true);
-
-    const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
-    const code = watchlistUtils.generateCode().toLowerCase();
-
-    try {
-      const { data: newWatchlist, error: createError } = await supabase
-        .from('watchlists')
-        .insert([{ code, name: newWatchlistName.trim(), created_by: user.id }])
-        .select()
-        .single();
-
-      if (createError) {
-        alert('Failed to create watchlist: ' + createError.message);
-        setCreatingWatchlist(false);
-        return;
-      }
-
-      await supabase
-        .from('watchlist_members')
-        .upsert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }], { onConflict: 'watchlist_id,user_id' });
-
-      // Update URL and state
-      watchlistUtils.updateUrl(code);
-      watchlistUtils.saveSlug(code);
-      setWatchlistSlug(code);
-      setNewWatchlistName('');
-      setCreatingWatchlist(false);
-    } catch (err) {
-      alert('Error: ' + err.message);
-      setCreatingWatchlist(false);
-    }
-  };
-
-  // Handler for joining existing watchlist from welcome screen
-  const handleJoinByCode = () => {
-    if (!joinCode.trim()) return;
-    const slug = joinCode.trim().toLowerCase();
-    watchlistUtils.updateUrl(slug);
-    setWatchlistSlug(slug);
-    setJoinCode('');
-  };
-
-  // No watchlist slug - show welcome/create screen
-  if (!watchlistSlug) {
-    return (
-      <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
-        <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md w-full">
-          <span className="text-5xl mb-4 block">🐂</span>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Welcome to Bullpen!</h2>
-          <p className="text-slate-500 mb-6">Track stocks and compete with friends.</p>
-
-          <div className="space-y-4">
-            <div>
-              <input
-                type="text"
-                value={newWatchlistName}
-                onChange={(e) => setNewWatchlistName(e.target.value)}
-                placeholder="New watchlist name..."
-                className="w-full px-4 py-3 bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={handleCreateNewWatchlist}
-                disabled={creatingWatchlist || !newWatchlistName.trim()}
-                className="w-full mt-2 px-6 py-3 text-white font-semibold rounded-xl disabled:opacity-50"
-                style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
-              >
-                {creatingWatchlist ? 'Creating...' : 'Create New Watchlist'}
-              </button>
-            </div>
-
-            <div className="relative">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-slate-200"></div>
-              </div>
-              <div className="relative flex justify-center text-sm">
-                <span className="px-2 bg-white text-slate-400">or join existing</span>
-              </div>
-            </div>
-
-            <div>
-              <input
-                type="text"
-                value={joinCode}
-                onChange={(e) => setJoinCode(e.target.value)}
-                placeholder="Enter watchlist code..."
-                className="w-full px-4 py-3 bg-slate-100 rounded-xl text-slate-800 focus:outline-none focus:ring-2 focus:ring-blue-500"
-              />
-              <button
-                onClick={handleJoinByCode}
-                disabled={!joinCode.trim()}
-                className="w-full mt-2 px-6 py-3 text-slate-700 font-semibold rounded-xl border border-slate-200 hover:bg-slate-50 disabled:opacity-50"
-              >
-                Join Watchlist
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Watchlist slug provided but not found
   if (!watchlist) {
     const handleCreateWatchlist = async () => {
       if (!user || !supabase) return;
 
       const displayName = profile?.display_name || profile?.username || user.email?.split('@')[0] || 'User';
-      const code = watchlistSlug;
-      const name = watchlistSlug.charAt(0).toUpperCase() + watchlistSlug.slice(1);
+      const code = watchlistSlug === 'bullpen' ? 'bullpen' : watchlistUtils.generateCode().toLowerCase();
+      const name = watchlistSlug === 'bullpen' ? 'Bullpen' : watchlistSlug;
 
       try {
+        // Create the watchlist
         const { data: newWatchlist, error: createError } = await supabase
           .from('watchlists')
           .insert([{ code, name, created_by: user.id }])
@@ -3005,9 +2983,10 @@ const StockDashboard = () => {
           return;
         }
 
+        // Join as member
         const { error: joinError } = await supabase
           .from('watchlist_members')
-          .upsert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }], { onConflict: 'watchlist_id,user_id' });
+          .insert([{ watchlist_id: newWatchlist.id, user_id: user.id, display_name: displayName }]);
 
         if (joinError) {
           console.error('Failed to join watchlist:', joinError);
@@ -3015,8 +2994,7 @@ const StockDashboard = () => {
           return;
         }
 
-        // Save and reload
-        watchlistUtils.saveSlug(watchlistSlug);
+        // Reload the page to pick up the new watchlist
         window.location.reload();
       } catch (err) {
         console.error('Error creating watchlist:', err);
@@ -3028,26 +3006,29 @@ const StockDashboard = () => {
       <div className="min-h-screen flex items-center justify-center" style={{ background: 'linear-gradient(180deg, #F5F5F7 0%, #FFFFFF 50%, #F5F5F7 100%)' }}>
         <div className="text-center p-8 bg-white rounded-2xl shadow-lg max-w-md">
           <span className="text-5xl mb-4 block">🐂</span>
-          <h2 className="text-2xl font-bold text-slate-800 mb-2">Watchlist Not Found</h2>
+          <h2 className="text-2xl font-bold text-slate-800 mb-2">
+            {watchlistSlug === 'bullpen' ? 'Welcome to Bullpen!' : 'Watchlist Not Found'}
+          </h2>
           <p className="text-slate-500 mb-4">
-            The watchlist "{watchlistSlug}" doesn't exist yet.
+            {watchlistSlug === 'bullpen'
+              ? 'Create the main Bullpen watchlist to get started.'
+              : `The watchlist "${watchlistSlug}" doesn't exist.`}
           </p>
           <button
             onClick={handleCreateWatchlist}
             className="px-6 py-3 text-white font-semibold rounded-xl w-full mb-3"
             style={{ background: 'linear-gradient(180deg, #34C759 0%, #2DB34B 100%)' }}
           >
-            Create "{watchlistSlug}"
+            {watchlistSlug === 'bullpen' ? 'Create Bullpen' : 'Create This Watchlist'}
           </button>
-          <button
-            onClick={() => {
-              setWatchlistSlug(null);
-              window.history.replaceState({}, '', window.location.pathname);
-            }}
-            className="px-6 py-3 text-slate-600 font-semibold rounded-xl w-full border border-slate-200 hover:bg-slate-50"
-          >
-            Pick Different Watchlist
-          </button>
+          {watchlistSlug !== 'bullpen' && (
+            <button
+              onClick={() => window.location.href = '/'}
+              className="px-6 py-3 text-slate-600 font-semibold rounded-xl w-full border border-slate-200 hover:bg-slate-50"
+            >
+              Go to Home
+            </button>
+          )}
         </div>
       </div>
     );
