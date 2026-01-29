@@ -969,28 +969,22 @@ const PositionEntry = ({ symbol, positions, currentPrice, currentUser, onAddPosi
       {!myPosition && (
         <>
           {showForm ? (
-            <div className="bg-slate-700 rounded-lg p-4 border border-slate-600">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Number of Shares</label>
-                  <input type="number" value={shares} onChange={(e) => setShares(e.target.value)}
-                    placeholder="e.g. 10" step="0.01"
-                    className="w-full px-3 py-2 bg-slate-600 text-white text-sm rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                </div>
-                <div>
-                  <label className="block text-slate-400 text-xs mb-1">Average Cost per Share ($)</label>
-                  <input type="number" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)}
-                    placeholder="e.g. 150.00" step="0.01"
-                    className="w-full px-3 py-2 bg-slate-600 text-white text-sm rounded-lg border border-slate-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
-                </div>
+            <div className="bg-slate-700 rounded p-3 space-y-2">
+              <div className="flex gap-2">
+                <input type="number" value={shares} onChange={(e) => setShares(e.target.value)}
+                  placeholder="Shares" step="0.01"
+                  className="flex-1 px-2 py-1 bg-slate-600 text-white text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
+                <input type="number" value={buyPrice} onChange={(e) => setBuyPrice(e.target.value)}
+                  placeholder="Buy price" step="0.01"
+                  className="flex-1 px-2 py-1 bg-slate-600 text-white text-sm rounded focus:outline-none focus:ring-1 focus:ring-blue-500" />
               </div>
-              <div className="flex gap-2 mt-4">
+              <div className="flex gap-2">
                 <button onClick={handleSubmit} disabled={!buyPrice || !shares}
-                  className="flex-1 py-2 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white text-sm font-medium rounded-lg transition-colors">
+                  className="flex-1 py-1 bg-green-600 hover:bg-green-700 disabled:bg-slate-600 text-white text-sm rounded">
                   Add Position
                 </button>
                 <button onClick={() => setShowForm(false)}
-                  className="px-4 py-2 bg-slate-600 hover:bg-slate-500 text-white text-sm font-medium rounded-lg transition-colors">
+                  className="px-3 py-1 bg-slate-600 hover:bg-slate-500 text-white text-sm rounded">
                   Cancel
                 </button>
               </div>
@@ -1248,7 +1242,7 @@ const PortfolioSummary = ({ positions, stockData, currentUser, allUsers, onAddPo
                   <span className={`font-semibold ${isCurrentUser ? color.text : theme === 'dark' ? 'text-white' : 'text-slate-800'}`}>{user}</span>
                   {isCurrentUser && <span className="ml-2 text-xs bg-blue-500 text-white px-2 py-0.5 rounded">You</span>}
                   <div className={`text-xs ${theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}`}>
-                    {portfolio.positionCount} position{portfolio.positionCount !== 1 ? 's' : ''}
+                    {portfolio.positionCount} position{portfolio.positionCount !== 1 ? 's' : ''} · ${portfolio.totalValue.toLocaleString(undefined, { maximumFractionDigits: 0 })}
                   </div>
                 </div>
               </div>
@@ -1409,12 +1403,10 @@ const ShareModal = ({ watchlistId, onClose }) => {
 const WelcomeModal = ({ onComplete }) => {
   const [step, setStep] = useState(0);
   const [name, setName] = useState('');
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
 
   const steps = [
     {
-      title: 'Welcome to Bullpen!',
+      title: 'Welcome to Stock Watchlist!',
       icon: '👋',
       description: 'Track your favorite stocks, compete with friends, and make smarter investment decisions together.',
     },
@@ -1424,9 +1416,9 @@ const WelcomeModal = ({ onComplete }) => {
       description: 'Add positions with your buy price to track P/L. See how you rank against other investors on the leaderboard.',
     },
     {
-      title: 'Create Your Account',
-      icon: '🔐',
-      description: 'Choose a username and PIN to secure your account.',
+      title: 'Collaborate & Share',
+      icon: '🤝',
+      description: 'Share your watchlist with friends, leave notes on stocks, and see what others are bullish or bearish on.',
     },
   ];
 
@@ -1438,23 +1430,10 @@ const WelcomeModal = ({ onComplete }) => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!name.trim() || !pin.trim()) return;
-
-    if (pin.length < 4) {
-      setError('PIN must be at least 4 digits.');
-      return;
+    if (name.trim()) {
+      localStorage.setItem('has-seen-welcome', 'true');
+      onComplete(name.trim());
     }
-
-    const storedUsers = JSON.parse(localStorage.getItem('bullpen-users') || '{}');
-    if (storedUsers[name.trim()]) {
-      setError('Username already exists. Please choose another.');
-      return;
-    }
-
-    storedUsers[name.trim()] = pin;
-    localStorage.setItem('bullpen-users', JSON.stringify(storedUsers));
-    localStorage.setItem('has-seen-welcome', 'true');
-    onComplete(name.trim());
   };
 
   return (
@@ -1480,32 +1459,17 @@ const WelcomeModal = ({ onComplete }) => {
 
             {step === 2 ? (
               <form onSubmit={handleSubmit}>
-                <div className="mb-3">
-                  <label className="block text-slate-500 text-sm mb-1">Username</label>
-                  <input
-                    type="text"
-                    value={name}
-                    onChange={(e) => { setName(e.target.value); setError(''); }}
-                    placeholder="Choose a username"
-                    className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    autoFocus
-                  />
-                </div>
-                <div className="mb-4">
-                  <label className="block text-slate-500 text-sm mb-1">PIN (4+ digits)</label>
-                  <input
-                    type="password"
-                    value={pin}
-                    onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
-                    placeholder="Create a PIN"
-                    maxLength={8}
-                    className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
-                  />
-                </div>
-                {error && <p className="text-red-500 text-sm mb-3">{error}</p>}
+                <input
+                  type="text"
+                  value={name}
+                  onChange={(e) => setName(e.target.value)}
+                  placeholder="Enter your name"
+                  className="w-full px-4 py-3 bg-slate-100 text-slate-800 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+                  autoFocus
+                />
                 <button
                   type="submit"
-                  disabled={!name.trim() || !pin.trim()}
+                  disabled={!name.trim()}
                   className="w-full py-3 text-white font-semibold rounded-xl transition-all disabled:opacity-50"
                   style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
                 >
@@ -1539,71 +1503,25 @@ const WelcomeModal = ({ onComplete }) => {
 
 const UserSetupModal = ({ onSetUser }) => {
   const [name, setName] = useState('');
-  const [pin, setPin] = useState('');
-  const [isReturningUser, setIsReturningUser] = useState(false);
-  const [error, setError] = useState('');
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (!name.trim() || !pin.trim()) return;
-
-    const storedUsers = JSON.parse(localStorage.getItem('bullpen-users') || '{}');
-
-    if (isReturningUser) {
-      // Sign in - verify PIN
-      if (storedUsers[name.trim()] && storedUsers[name.trim()] === pin) {
-        onSetUser(name.trim());
-      } else if (!storedUsers[name.trim()]) {
-        setError('Username not found. Please sign up first.');
-      } else {
-        setError('Incorrect PIN. Please try again.');
-      }
-    } else {
-      // Sign up - create new user
-      if (storedUsers[name.trim()]) {
-        setError('Username already exists. Please sign in instead.');
-        return;
-      }
-      if (pin.length < 4) {
-        setError('PIN must be at least 4 digits.');
-        return;
-      }
-      storedUsers[name.trim()] = pin;
-      localStorage.setItem('bullpen-users', JSON.stringify(storedUsers));
-      onSetUser(name.trim());
-    }
+    if (name.trim()) onSetUser(name.trim());
   };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-slate-800 rounded-xl p-6 max-w-md w-full mx-4">
-        <h2 className="text-xl font-bold text-white mb-2">👋 Welcome to Bullpen!</h2>
-        <p className="text-slate-400 text-sm mb-4">
-          {isReturningUser ? 'Sign in to your account.' : 'Create an account to start tracking stocks with friends.'}
-        </p>
+        <h2 className="text-xl font-bold text-white mb-2">👋 Welcome!</h2>
+        <p className="text-slate-400 text-sm mb-4">Enter your name to start tracking stocks with friends.</p>
         <form onSubmit={handleSubmit}>
-          <div className="mb-3">
-            <label className="block text-slate-400 text-sm mb-1">Username</label>
-            <input type="text" value={name} onChange={(e) => { setName(e.target.value); setError(''); }}
-              placeholder="Enter username"
-              className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              autoFocus />
-          </div>
-          <div className="mb-4">
-            <label className="block text-slate-400 text-sm mb-1">PIN</label>
-            <input type="password" value={pin} onChange={(e) => { setPin(e.target.value.replace(/\D/g, '')); setError(''); }}
-              placeholder={isReturningUser ? "Enter your PIN" : "Create a 4+ digit PIN"}
-              maxLength={8}
-              className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500" />
-          </div>
-          {error && <p className="text-red-400 text-sm mb-3">{error}</p>}
-          <button type="submit" disabled={!name.trim() || !pin.trim()}
-            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-semibold rounded-lg transition-colors mb-3">
-            {isReturningUser ? 'Sign In' : 'Create Account'}
-          </button>
-          <button type="button" onClick={() => { setIsReturningUser(!isReturningUser); setError(''); }}
-            className="w-full py-2 text-slate-400 hover:text-white text-sm transition-colors">
-            {isReturningUser ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)}
+            placeholder="Your name"
+            className="w-full px-4 py-3 bg-slate-700 text-white rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 mb-4"
+            autoFocus />
+          <button type="submit" disabled={!name.trim()}
+            className="w-full py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-slate-600 text-white font-semibold rounded-lg transition-colors">
+            Get Started
           </button>
         </form>
       </div>
@@ -1612,7 +1530,7 @@ const UserSetupModal = ({ onSetUser }) => {
 };
 
 // User Dropdown Menu
-const UserDropdown = ({ currentUser, theme, onSignOut, toggleTheme }) => {
+const UserDropdown = ({ currentUser, theme, onSignOut, onShowAlerts, onShowSector, onShowPortfolio, toggleTheme }) => {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef(null);
 
@@ -1627,6 +1545,9 @@ const UserDropdown = ({ currentUser, theme, onSignOut, toggleTheme }) => {
   }, []);
 
   const menuItems = [
+    { icon: Bell, label: 'Price Alerts', onClick: () => { onShowAlerts(); setIsOpen(false); } },
+    { icon: PieChartIcon, label: 'Sector Allocation', onClick: () => { onShowSector(); setIsOpen(false); } },
+    { icon: Wallet, label: 'Portfolio Value', onClick: () => { onShowPortfolio(); setIsOpen(false); } },
     { icon: theme === 'dark' ? Sun : Moon, label: theme === 'dark' ? 'Light Mode' : 'Dark Mode', onClick: () => { toggleTheme(); setIsOpen(false); } },
     { divider: true },
     { icon: X, label: 'Sign Out', onClick: () => { onSignOut(); setIsOpen(false); }, danger: true },
@@ -1916,58 +1837,73 @@ const StockCard = ({
 
   return (
     <div
-      className={`rounded-xl overflow-hidden transition-all ${isLoading ? 'opacity-60' : ''}`}
+      className={`rounded-2xl overflow-hidden transition-all ${isLoading ? 'opacity-60' : ''}`}
       style={{
         background: 'rgba(255,255,255,0.9)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: '1px solid rgba(0,0,0,0.06)',
-        boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
+        border: comparisonMode && isSelectedForComparison ? '2px solid #AF52DE' : '1px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
       }}
     >
-      <div className="p-3">
-        <div className="flex justify-between items-start mb-2">
-          <div>
-            <div className="flex items-center gap-2 mb-0.5">
-              <h2 className="text-lg font-semibold text-slate-800" style={{ letterSpacing: '-0.01em' }}>{stock.symbol}</h2>
-              <VoteButtons symbol={stock.symbol} votes={votes} currentUser={currentUser} onVote={onVote} />
-            </div>
-            <div className="text-xs line-clamp-1 text-slate-500 mb-1">{stock.shortName}</div>
-            <div className="flex flex-wrap gap-1 items-center">
-              <SectorBadge sector={stock.sector} small />
-              {myStance && <StanceBadge stance={myStance} />}
+      <div className="p-5">
+        <div className="flex justify-between items-start mb-3">
+          <div className="flex items-start gap-3">
+            {comparisonMode && (
+              <button
+                onClick={() => onToggleComparison(stock.symbol)}
+                className="w-6 h-6 rounded-lg flex items-center justify-center mt-1 transition-all"
+                style={{
+                  background: isSelectedForComparison ? 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)' : 'rgba(60,60,67,0.12)',
+                  border: isSelectedForComparison ? 'none' : '1.5px solid rgba(118,118,128,0.2)'
+                }}
+              >
+                {isSelectedForComparison && <Check className="w-4 h-4 text-white" />}
+              </button>
+            )}
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <h2 className="text-2xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{stock.symbol}</h2>
+                <VoteButtons symbol={stock.symbol} votes={votes} currentUser={currentUser} onVote={onVote} />
+              </div>
+              <div className="text-sm mb-2 line-clamp-1 text-slate-500">{stock.shortName}</div>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                <SectorBadge sector={stock.sector} />
+                {myStance && <StanceBadge stance={myStance} />}
+              </div>
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            {canDelete && (
-              <button onClick={() => onRemove(stock.symbol)} className="text-slate-400 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50">
-                <X className="w-3 h-3" />
+            {canDelete && !comparisonMode && (
+              <button onClick={() => onRemove(stock.symbol)} className="text-slate-400 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-50">
+                <X className="w-4 h-4" />
               </button>
             )}
             {addedBy && (
               <div className="flex items-center gap-1 text-xs text-slate-400">
                 <UserAvatar username={addedBy} size="sm" />
+                <span>{addedBy}</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="mb-2">
-          <div className="text-xl font-semibold text-slate-800" style={{ letterSpacing: '-0.01em' }}>{formatCurrency(stock.price)}</div>
-          <div className={`flex items-center gap-1.5 mt-0.5 text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
-            {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+        <div className="mb-4">
+          <div className="text-3xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(stock.price)}</div>
+          <div className={`flex items-center gap-2 mt-1 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
+            {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
             <span className="font-medium">{isPositive ? '+' : ''}{formatCurrency(stock.change)}</span>
-            <span className="px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: isPositive ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)' }}>
+            <span className="px-2 py-0.5 rounded-full text-sm font-medium" style={{ background: isPositive ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)' }}>
               {isPositive ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
             </span>
           </div>
         </div>
 
         {myPosition && (
-          <div className={`p-1.5 rounded mb-2 text-xs ${(stock.price - myPosition.buy_price) >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-            <div className="flex justify-between">
-              <span className="text-slate-500">Your P/L:</span>
-              <span className={`font-bold ${(stock.price - myPosition.buy_price) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
+          <div className={`p-2 rounded mb-3 ${(stock.price - myPosition.buy_price) >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+            <div className="flex justify-between text-sm">
+              <span className="text-slate-300">Your P/L:</span>
+              <span className={`font-bold ${(stock.price - myPosition.buy_price) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                 {(stock.price - myPosition.buy_price) >= 0 ? '+' : ''}
                 {formatCurrency((stock.price - myPosition.buy_price) * myPosition.shares)}
                 {' '}({(((stock.price - myPosition.buy_price) / myPosition.buy_price) * 100).toFixed(2)}%)
@@ -1976,59 +1912,59 @@ const StockCard = ({
           </div>
         )}
 
-        <MiniChart data={stock.historicalData} isPositive={isPositive} height={40} />
+        <MiniChart data={stock.historicalData} isPositive={isPositive} />
 
-        <div className="grid grid-cols-5 gap-1 mt-2 text-center text-xs">
+        <div className="grid grid-cols-5 gap-1 mt-3 text-center text-xs">
           {['1W', '1M', '3M', 'YTD', '1Y'].map(period => (
             <div key={period}>
-              <div className="text-slate-400 text-xs">{period}</div>
-              <PerformanceCell value={stock.performance?.[period]} small />
+              <div className="text-slate-400">{period}</div>
+              <PerformanceCell value={stock.performance?.[period]} />
             </div>
           ))}
         </div>
 
-        <div className="flex gap-1.5 mt-2 text-xs">
+        <div className="flex gap-2 mt-3 text-xs">
           {stockNotes.length > 0 && (
-            <span className="bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded flex items-center gap-1">
-              <MessageSquare className="w-2.5 h-2.5" /> {stockNotes.length}
+            <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded flex items-center gap-1">
+              <MessageSquare className="w-3 h-3" /> {stockNotes.length}
             </span>
           )}
           {stockPositions.length > 0 && (
-            <span className="bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded flex items-center gap-1">
-              <DollarSign className="w-2.5 h-2.5" /> {stockPositions.length}
+            <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded flex items-center gap-1">
+              <DollarSign className="w-3 h-3" /> {stockPositions.length}
             </span>
           )}
         </div>
 
         <button onClick={() => onExpand(stock.symbol)}
-          className="w-full mt-2 py-1.5 text-xs text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-slate-200">
-          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-          {isExpanded ? 'Less' : 'More'}
+          className="w-full mt-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex items-center justify-center gap-1 rounded">
+          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+          {isExpanded ? 'Less' : 'More Details'}
         </button>
       </div>
 
       {isExpanded && (
-        <div className="border-t border-slate-200 p-4 bg-slate-50 space-y-3">
+        <div className="border-t border-slate-700 p-5 bg-slate-850 space-y-4">
           <LargeChart data={stock.historicalData} symbol={stock.symbol} />
           
           <div>
-            <h3 className="text-xs font-semibold text-slate-500 mb-2">Key Stats</h3>
-            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+            <h3 className="text-sm font-semibold text-slate-400 mb-2">Key Stats</h3>
+            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
               <div className="flex justify-between">
                 <span className="text-slate-400">Market Cap</span>
-                <span className="text-slate-700 font-medium">{formatLargeNumber(stock.marketCap)}</span>
+                <span className="text-white">{formatLargeNumber(stock.marketCap)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Day High</span>
-                <span className="text-slate-700 font-medium">{formatCurrency(stock.dayHigh)}</span>
+                <span className="text-white">{formatCurrency(stock.dayHigh)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Day Low</span>
-                <span className="text-slate-700 font-medium">{formatCurrency(stock.dayLow)}</span>
+                <span className="text-white">{formatCurrency(stock.dayLow)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Prev Close</span>
-                <span className="text-slate-700 font-medium">{formatCurrency(stock.previousClose)}</span>
+                <span className="text-white">{formatCurrency(stock.previousClose)}</span>
               </div>
             </div>
           </div>
@@ -2565,16 +2501,14 @@ const StockDashboard = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-1">
-              <span className="text-3xl md:text-4xl">🐂</span>
-              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Bullpen</h1>
+            <div className="flex items-center gap-3 mb-2">
+              <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Stock Watchlist</h1>
               <span className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full font-medium ${isConnected ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`} style={{ boxShadow: isConnected ? '0 0 8px rgba(52,199,89,0.5)' : 'none' }}></span>
                 {isConnected ? 'Live' : 'Offline'}
               </span>
             </div>
-            <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>Track stocks. Compete with friends.</p>
-            <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
+            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
           </div>
 
           <div className="flex items-center gap-2">
@@ -2593,8 +2527,23 @@ const StockDashboard = () => {
               currentUser={currentUser}
               theme={theme}
               onSignOut={handleSignOut}
+              onShowAlerts={() => setShowPriceAlerts(true)}
+              onShowSector={() => setShowSectorAllocation(true)}
+              onShowPortfolio={() => setShowPortfolioValue(true)}
               toggleTheme={toggleTheme}
             />
+
+            {/* Feed Button */}
+            <button onClick={() => setShowFeed(!showFeed)}
+              className={`flex items-center gap-2 px-4 py-2 rounded-xl font-medium transition-all ${showFeed ? 'text-white shadow-lg' : theme === 'dark' ? 'text-slate-300 hover:text-white' : 'text-slate-600 hover:text-blue-500'}`}
+              style={showFeed ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 15px rgba(175,82,222,0.3)' } : { background: theme === 'dark' ? 'rgba(30,41,59,0.8)' : 'rgba(255,255,255,0.8)', backdropFilter: 'blur(20px)', border: '1px solid rgba(0,0,0,0.06)' }}>
+              <Activity className="w-4 h-4" /> Feed
+              {feedItems.length > 0 && (
+                <span className={`text-xs px-2 py-0.5 rounded-full font-semibold ${showFeed ? 'bg-white/20 text-white' : 'bg-purple-500 text-white'}`}>
+                  {feedItems.length}
+                </span>
+              )}
+            </button>
 
             {/* Share Button */}
             <button onClick={() => setShowShareModal(true)}
@@ -2634,6 +2583,16 @@ const StockDashboard = () => {
               <X className="w-4 h-4" />
             </button>
           </div>
+        )}
+
+        {/* Social Feed - shows on both tabs */}
+        {showFeed && (
+          <SocialFeed
+            feedItems={feedItems}
+            currentUser={currentUser}
+            theme={theme}
+            onClose={() => setShowFeed(false)}
+          />
         )}
 
         {/* LEADERBOARD TAB */}
@@ -2705,23 +2664,54 @@ const StockDashboard = () => {
               {/* View mode toggle */}
               <div className="flex rounded-xl p-1" style={{ background: 'rgba(60,60,67,0.12)' }}>
                 <button onClick={() => setViewMode('grid')}
-                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'grid' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  title="Grid View">
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'grid' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <LayoutGrid className="w-4 h-4" />
                 </button>
                 <button onClick={() => setViewMode('compact')}
-                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'compact' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}
-                  title="List View">
+                  className={`px-3 py-2 rounded-lg text-sm transition-all ${viewMode === 'compact' ? 'bg-white text-blue-500 shadow-sm' : 'text-slate-500 hover:text-slate-700'}`}>
                   <List className="w-4 h-4" />
                 </button>
               </div>
 
+              {/* Comparison mode toggle */}
+              <button onClick={toggleComparisonMode}
+                className={`px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-all ${comparisonMode ? 'text-white' : 'text-slate-600 hover:text-purple-500'}`}
+                style={comparisonMode ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 12px rgba(175,82,222,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
+                <BarChart2 className="w-4 h-4" />
+                {comparisonMode ? `Compare (${selectedForComparison.length})` : 'Compare'}
+              </button>
+
               {/* Filter toggle */}
               <button onClick={() => setShowFilters(!showFilters)}
                 className={`px-3 py-2 rounded-xl flex items-center gap-2 transition-all ${showFilters ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showFilters ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Filter & Sort">
+                style={showFilters ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
                 <Filter className="w-4 h-4" />
+              </button>
+
+              {/* Feature toggles */}
+              <button onClick={() => setShowNewsFeed(!showNewsFeed)}
+                className={`px-3 py-2 rounded-xl transition-all ${showNewsFeed ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showNewsFeed ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="News Feed">
+                <Newspaper className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowSectorAllocation(!showSectorAllocation)}
+                className={`px-3 py-2 rounded-xl transition-all ${showSectorAllocation ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showSectorAllocation ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Sector Allocation">
+                <PieChartIcon className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowPortfolioValue(!showPortfolioValue)}
+                className={`px-3 py-2 rounded-xl transition-all ${showPortfolioValue ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
+                style={showPortfolioValue ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Portfolio Value">
+                <Wallet className="w-4 h-4" />
+              </button>
+              <button onClick={() => setShowPriceAlerts(!showPriceAlerts)}
+                className={`px-3 py-2 rounded-xl transition-all ${showPriceAlerts ? 'text-white' : 'text-slate-600 hover:text-orange-500'}`}
+                style={showPriceAlerts ? { background: 'linear-gradient(180deg, #FF9F0A 0%, #FF9500 100%)', boxShadow: '0 4px 12px rgba(255,149,0,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
+                title="Price Alerts">
+                <Bell className="w-4 h-4" />
               </button>
 
               <button onClick={fetchAllData} disabled={loading}
@@ -2764,6 +2754,58 @@ const StockDashboard = () => {
           )}
             </div>
 
+            {/* Comparison Chart */}
+            {comparisonMode && selectedForComparison.length >= 2 && (
+              <ComparisonChart
+                selectedStocks={selectedForComparison}
+                stockData={stockData}
+                theme={theme}
+                onClose={() => {
+                  setComparisonMode(false);
+                  setSelectedForComparison([]);
+                }}
+              />
+            )}
+
+            {/* News Feed */}
+            {showNewsFeed && (
+              <NewsFeed
+                symbols={symbols}
+                theme={theme}
+                onClose={() => setShowNewsFeed(false)}
+              />
+            )}
+
+            {/* Sector Allocation */}
+            {showSectorAllocation && (
+              <SectorAllocation
+                stockData={stockData}
+                positions={positions}
+                currentUser={currentUser}
+                theme={theme}
+                onClose={() => setShowSectorAllocation(false)}
+              />
+            )}
+
+            {/* Portfolio Value Chart */}
+            {showPortfolioValue && (
+              <PortfolioValueChart
+                stockData={stockData}
+                positions={positions}
+                currentUser={currentUser}
+                theme={theme}
+                onClose={() => setShowPortfolioValue(false)}
+              />
+            )}
+
+            {/* Price Alerts */}
+            {showPriceAlerts && (
+              <PriceAlertManager
+                stockData={stockData}
+                theme={theme}
+                onClose={() => setShowPriceAlerts(false)}
+              />
+            )}
 
             {/* Stock Grid or Compact List */}
             {loading && Object.keys(stockData).length === 0 ? (
@@ -2782,6 +2824,9 @@ const StockDashboard = () => {
                 positions={positions}
                 currentUser={currentUser}
                 onExpand={toggleExpand}
+                comparisonMode={comparisonMode}
+                isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
+                onToggleComparison={toggleStockComparison}
                 theme={theme}
                   />
                 ))}
@@ -2810,6 +2855,9 @@ const StockDashboard = () => {
                     currentUser={currentUser}
                     isConnected={isConnected}
                     addedBy={stockMeta[stock.symbol]?.added_by}
+                    comparisonMode={comparisonMode}
+                    isSelectedForComparison={selectedForComparison.includes(stock.symbol)}
+                    onToggleComparison={toggleStockComparison}
                     theme={theme}
                   />
                 ))}
@@ -2827,11 +2875,6 @@ const StockDashboard = () => {
           </>
         )}
 
-        {/* Footer */}
-        <div className={`mt-8 pt-6 border-t text-center ${theme === 'dark' ? 'border-slate-700 text-slate-500' : 'border-slate-200 text-slate-400'}`}>
-          <p className="text-sm mb-1">Created by <span className="font-medium">Ajinkya Rane</span></p>
-          <p className="text-xs">Data from Finnhub · Real-time sync via Supabase</p>
-        </div>
       </div>
 
       {/* Modals */}
