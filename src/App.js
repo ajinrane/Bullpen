@@ -2996,45 +2996,11 @@ const StockDashboard = () => {
                 </button>
               </div>
 
-              {/* Comparison mode toggle */}
-              <button onClick={toggleComparisonMode}
-                className={`px-4 py-2 rounded-xl flex items-center gap-2 font-medium transition-all ${comparisonMode ? 'text-white' : 'text-slate-600 hover:text-purple-500'}`}
-                style={comparisonMode ? { background: 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)', boxShadow: '0 4px 12px rgba(175,82,222,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
-                <BarChart2 className="w-4 h-4" />
-                {comparisonMode ? `Compare (${selectedForComparison.length})` : 'Compare'}
-              </button>
-
               {/* Filter toggle */}
               <button onClick={() => setShowFilters(!showFilters)}
                 className={`px-3 py-2 rounded-xl flex items-center gap-2 transition-all ${showFilters ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
                 style={showFilters ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}>
                 <Filter className="w-4 h-4" />
-              </button>
-
-              {/* Feature toggles */}
-              <button onClick={() => setShowNewsFeed(!showNewsFeed)}
-                className={`px-3 py-2 rounded-xl transition-all ${showNewsFeed ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showNewsFeed ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="News Feed">
-                <Newspaper className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowSectorAllocation(!showSectorAllocation)}
-                className={`px-3 py-2 rounded-xl transition-all ${showSectorAllocation ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showSectorAllocation ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Sector Allocation">
-                <PieChartIcon className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowPortfolioValue(!showPortfolioValue)}
-                className={`px-3 py-2 rounded-xl transition-all ${showPortfolioValue ? 'text-white' : 'text-slate-600 hover:text-blue-500'}`}
-                style={showPortfolioValue ? { background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)', boxShadow: '0 4px 12px rgba(0,122,255,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Portfolio Value">
-                <Wallet className="w-4 h-4" />
-              </button>
-              <button onClick={() => setShowPriceAlerts(!showPriceAlerts)}
-                className={`px-3 py-2 rounded-xl transition-all ${showPriceAlerts ? 'text-white' : 'text-slate-600 hover:text-orange-500'}`}
-                style={showPriceAlerts ? { background: 'linear-gradient(180deg, #FF9F0A 0%, #FF9500 100%)', boxShadow: '0 4px 12px rgba(255,149,0,0.3)' } : { background: 'rgba(60,60,67,0.12)' }}
-                title="Price Alerts">
-                <Bell className="w-4 h-4" />
               </button>
 
               <button onClick={fetchAllData} disabled={loading}
@@ -3087,46 +3053,6 @@ const StockDashboard = () => {
                   setComparisonMode(false);
                   setSelectedForComparison([]);
                 }}
-              />
-            )}
-
-            {/* News Feed */}
-            {showNewsFeed && (
-              <NewsFeed
-                symbols={symbols}
-                theme={theme}
-                onClose={() => setShowNewsFeed(false)}
-              />
-            )}
-
-            {/* Sector Allocation */}
-            {showSectorAllocation && (
-              <SectorAllocation
-                stockData={stockData}
-                positions={positions}
-                currentUser={currentUser}
-                theme={theme}
-                onClose={() => setShowSectorAllocation(false)}
-              />
-            )}
-
-            {/* Portfolio Value Chart */}
-            {showPortfolioValue && (
-              <PortfolioValueChart
-                stockData={stockData}
-                positions={positions}
-                currentUser={currentUser}
-                theme={theme}
-                onClose={() => setShowPortfolioValue(false)}
-              />
-            )}
-
-            {/* Price Alerts */}
-            {showPriceAlerts && (
-              <PriceAlertManager
-                stockData={stockData}
-                theme={theme}
-                onClose={() => setShowPriceAlerts(false)}
               />
             )}
 
