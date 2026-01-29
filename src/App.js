@@ -2355,7 +2355,7 @@ const StockDashboard = () => {
         // Now check if user is a member
         const { data: memberData, error: memberError } = await supabase
           .from('watchlist_members')
-          .select('id, watchlist_id, user_id, display_name, joined_at')
+          .select('id, watchlist_id, user_id, display_name, created_at')
           .eq('watchlist_id', watchlistData.id)
           .eq('user_id', user.id)
           .single();
@@ -2491,7 +2491,7 @@ const StockDashboard = () => {
         const watchlistId = watchlist.id;
 
         const [membersRes, notesRes, positionsRes, stancesRes, stocksRes] = await Promise.all([
-          supabase.from('watchlist_members').select('user_id, display_name, joined_at').eq('watchlist_id', watchlistId),
+          supabase.from('watchlist_members').select('user_id, display_name, created_at').eq('watchlist_id', watchlistId),
           supabase.from('notes').select('*').eq('watchlist_id', watchlistId).order('created_at', { ascending: false }),
           supabase.from('positions').select('*').eq('watchlist_id', watchlistId), // RLS: only returns user's own
           supabase.from('stances').select('*').eq('watchlist_id', watchlistId),

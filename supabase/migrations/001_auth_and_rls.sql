@@ -87,7 +87,7 @@ CREATE TABLE IF NOT EXISTS public.watchlist_members (
   watchlist_id UUID REFERENCES public.watchlists(id) ON DELETE CASCADE,
   user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
   display_name TEXT NOT NULL, -- Per-watchlist display name (shown on leaderboard)
-  joined_at TIMESTAMPTZ DEFAULT NOW(),
+  created_at TIMESTAMPTZ DEFAULT NOW(),
   UNIQUE(watchlist_id, user_id)
 );
 
