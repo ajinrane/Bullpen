@@ -2279,7 +2279,8 @@ const StockDashboard = () => {
   // Watchlist slug (isolated for mobile deep links)
   const [watchlistSlug] = useState(() => {
     const urlSearch = typeof window !== 'undefined' ? window.location.search : '';
-    return watchlistUtils.parse({ urlSearch });
+    const urlHash = typeof window !== 'undefined' ? window.location.hash : '';
+    return watchlistUtils.parse({ urlSearch, urlHash });
   });
 
   // Watchlist and membership state
@@ -2872,11 +2873,11 @@ const StockDashboard = () => {
           <h2 className="text-2xl font-bold text-slate-800 mb-2">Watchlist Not Found</h2>
           <p className="text-slate-500 mb-4">The watchlist "{watchlistSlug}" doesn't exist.</p>
           <button
-            onClick={() => window.location.href = '?watchlist=bullpen'}
+            onClick={() => window.location.href = '/'}
             className="px-6 py-3 text-white font-semibold rounded-xl"
             style={{ background: 'linear-gradient(180deg, #0A84FF 0%, #007AFF 100%)' }}
           >
-            Go to Default Watchlist
+            Go to Home
           </button>
         </div>
       </div>

@@ -52,8 +52,9 @@ const AuthModal = ({ onClose, redirectUrl }) => {
           onClose?.();
         }
       } else if (mode === 'magic') {
-        // Magic link
-        const { error } = await signInWithMagicLink(email, redirectUrl);
+        // Magic link - always redirect to main page (no watchlist param)
+        const magicLinkRedirect = typeof window !== 'undefined' ? `${window.location.origin}/` : '/';
+        const { error } = await signInWithMagicLink(email, magicLinkRedirect);
         if (error) {
           setError(error.message);
         } else {

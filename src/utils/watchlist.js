@@ -5,17 +5,54 @@
 
 const DEFAULT_WATCHLIST_SLUG = 'bullpen';
 
+// Supabase auth params to ignore when parsing slug
+const AUTH_PARAMS = ['access_token', 'refresh_token', 'token_type', 'expires_in', 'expires_at', 'type', 'error', 'error_description'];
+
+/**
+ * Check if URL contains only auth params (no watchlist param)
+ * This happens after magic link redirect
+ */
+const isAuthOnlyUrl = (urlSearch, urlHash) => {
+  // Check if hash contains auth tokens (Supabase puts them there)
+  if (urlHash && (urlHash.includes('access_token') || urlHash.includes('error'))) {
+    return true;
+  }
+
+  // Check if search params are auth-only
+  if (urlSearch) {
+    try {
+      const params = new URLSearchParams(urlSearch);
+      const keys = Array.from(params.keys());
+      // If all params are auth params, this is an auth redirect
+      if (keys.length > 0 && keys.every(k => AUTH_PARAMS.includes(k))) {
+        return true;
+      }
+    } catch (e) {
+      // Ignore parse errors
+    }
+  }
+
+  return false;
+};
+
 /**
  * Parse watchlist slug from URL or params
  * @param {object} options - Options object
  * @param {string} options.urlSearch - URL search string (e.g., window.location.search)
+ * @param {string} options.urlHash - URL hash string (e.g., window.location.hash)
  * @param {string} options.deepLinkSlug - Slug from deep link (mobile)
  * @returns {string} The watchlist slug
  */
-export const parseWatchlistSlug = ({ urlSearch = '', deepLinkSlug = null } = {}) => {
+export const parseWatchlistSlug = ({ urlSearch = '', urlHash = '', deepLinkSlug = null } = {}) => {
   // Priority: deep link > URL param > default
   if (deepLinkSlug) {
     return deepLinkSlug;
+  }
+
+  // If this is an auth-only URL (magic link redirect), use default
+  if (isAuthOnlyUrl(urlSearch, urlHash)) {
+    console.log('Auth redirect detected, using default watchlist');
+    return DEFAULT_WATCHLIST_SLUG;
   }
 
   // Parse from URL search params
