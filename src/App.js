@@ -3140,6 +3140,11 @@ const StockDashboard = () => {
                   setPenNotes(penData.notes || []);
                   setPenStances(penData.stances || []);
                   setPenActivity(penData.activity || []);
+                  // Add pen symbols to global symbols to fetch data
+                  const newSymbols = (penData.symbols || []).filter(s => !symbols.includes(s));
+                  if (newSymbols.length > 0) {
+                    setSymbols(prev => [...prev, ...newSymbols]);
+                  }
                 }}
                 onCreatePen={(code, pen) => {
                   setActivePenCode(code);
@@ -3227,12 +3232,16 @@ const StockDashboard = () => {
                       placeholder="Add ticker (e.g., AAPL)"
                       className={`flex-1 px-4 py-2 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 ${theme === 'dark' ? 'bg-slate-700 text-white' : 'bg-slate-100 text-slate-800'}`}
                       maxLength={5}
-                      onKeyPress={(e) => {
+                      onKeyPress={async (e) => {
                         if (e.key === 'Enter' && newSymbol.trim()) {
                           const symbol = newSymbol.trim().toUpperCase();
                           if (!penSymbols.includes(symbol)) {
                             const newSymbols = [...penSymbols, symbol];
                             setPenSymbols(newSymbols);
+                            // Also add to global symbols to fetch data
+                            if (!symbols.includes(symbol)) {
+                              setSymbols(prev => [...prev, symbol]);
+                            }
                             const newActivity = [...penActivity, {
                               type: 'stock_added',
                               username: currentUser,
@@ -3256,6 +3265,10 @@ const StockDashboard = () => {
                           if (!penSymbols.includes(symbol)) {
                             const newSymbols = [...penSymbols, symbol];
                             setPenSymbols(newSymbols);
+                            // Also add to global symbols to fetch data
+                            if (!symbols.includes(symbol)) {
+                              setSymbols(prev => [...prev, symbol]);
+                            }
                             const newActivity = [...penActivity, {
                               type: 'stock_added',
                               username: currentUser,
