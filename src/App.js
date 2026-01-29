@@ -1916,73 +1916,58 @@ const StockCard = ({
 
   return (
     <div
-      className={`rounded-2xl overflow-hidden transition-all ${isLoading ? 'opacity-60' : ''}`}
+      className={`rounded-xl overflow-hidden transition-all ${isLoading ? 'opacity-60' : ''}`}
       style={{
         background: 'rgba(255,255,255,0.9)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        border: comparisonMode && isSelectedForComparison ? '2px solid #AF52DE' : '1px solid rgba(0,0,0,0.06)',
-        boxShadow: '0 4px 24px rgba(0,0,0,0.06)',
+        border: '1px solid rgba(0,0,0,0.06)',
+        boxShadow: '0 2px 12px rgba(0,0,0,0.04)',
       }}
     >
-      <div className="p-5">
-        <div className="flex justify-between items-start mb-3">
-          <div className="flex items-start gap-3">
-            {comparisonMode && (
-              <button
-                onClick={() => onToggleComparison(stock.symbol)}
-                className="w-6 h-6 rounded-lg flex items-center justify-center mt-1 transition-all"
-                style={{
-                  background: isSelectedForComparison ? 'linear-gradient(180deg, #AF52DE 0%, #9B47C5 100%)' : 'rgba(60,60,67,0.12)',
-                  border: isSelectedForComparison ? 'none' : '1.5px solid rgba(118,118,128,0.2)'
-                }}
-              >
-                {isSelectedForComparison && <Check className="w-4 h-4 text-white" />}
-              </button>
-            )}
-            <div>
-              <div className="flex items-center gap-2 mb-1">
-                <h2 className="text-2xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{stock.symbol}</h2>
-                <VoteButtons symbol={stock.symbol} votes={votes} currentUser={currentUser} onVote={onVote} />
-              </div>
-              <div className="text-sm mb-2 line-clamp-1 text-slate-500">{stock.shortName}</div>
-              <div className="flex flex-wrap gap-1.5 items-center">
-                <SectorBadge sector={stock.sector} />
-                {myStance && <StanceBadge stance={myStance} />}
-              </div>
+      <div className="p-3">
+        <div className="flex justify-between items-start mb-2">
+          <div>
+            <div className="flex items-center gap-2 mb-0.5">
+              <h2 className="text-lg font-semibold text-slate-800" style={{ letterSpacing: '-0.01em' }}>{stock.symbol}</h2>
+              <VoteButtons symbol={stock.symbol} votes={votes} currentUser={currentUser} onVote={onVote} />
+            </div>
+            <div className="text-xs line-clamp-1 text-slate-500 mb-1">{stock.shortName}</div>
+            <div className="flex flex-wrap gap-1 items-center">
+              <SectorBadge sector={stock.sector} small />
+              {myStance && <StanceBadge stance={myStance} />}
             </div>
           </div>
           <div className="flex flex-col items-end gap-1">
-            {canDelete && !comparisonMode && (
-              <button onClick={() => onRemove(stock.symbol)} className="text-slate-400 hover:text-red-400 transition-colors p-1.5 rounded-lg hover:bg-red-50">
-                <X className="w-4 h-4" />
+            {canDelete && (
+              <button onClick={() => onRemove(stock.symbol)} className="text-slate-400 hover:text-red-400 transition-colors p-1 rounded hover:bg-red-50">
+                <X className="w-3 h-3" />
               </button>
             )}
             {addedBy && (
               <div className="flex items-center gap-1 text-xs text-slate-400">
                 <UserAvatar username={addedBy} size="sm" />
-                <span>{addedBy}</span>
               </div>
             )}
           </div>
         </div>
 
-        <div className="mb-4">
-          <div className="text-3xl font-semibold text-slate-800" style={{ letterSpacing: '-0.02em' }}>{formatCurrency(stock.price)}</div>
-          <div className={`flex items-center gap-2 mt-1 ${isPositive ? 'text-green-400' : 'text-red-400'}`}>
-            {isPositive ? <TrendingUp className="w-4 h-4" /> : <TrendingDown className="w-4 h-4" />}
+        <div className="mb-2">
+          <div className="text-xl font-semibold text-slate-800" style={{ letterSpacing: '-0.01em' }}>{formatCurrency(stock.price)}</div>
+          <div className={`flex items-center gap-1.5 mt-0.5 text-sm ${isPositive ? 'text-green-500' : 'text-red-500'}`}>
+            {isPositive ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
             <span className="font-medium">{isPositive ? '+' : ''}{formatCurrency(stock.change)}</span>
-            <span className="px-2 py-0.5 rounded-full text-sm font-medium" style={{ background: isPositive ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)' }}>
+            <span className="px-1.5 py-0.5 rounded text-xs font-medium" style={{ background: isPositive ? 'rgba(52,199,89,0.12)' : 'rgba(255,59,48,0.12)' }}>
               {isPositive ? '+' : ''}{(stock.changePercent || 0).toFixed(2)}%
             </span>
           </div>
         </div>
 
         {myPosition && (
-          <div className={`p-2 rounded mb-3 ${(stock.price - myPosition.buy_price) >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
-            <div className="flex justify-between text-sm">
-              <span className="text-slate-300">Your P/L:</span>
-              <span className={`font-bold ${(stock.price - myPosition.buy_price) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+          <div className={`p-1.5 rounded mb-2 text-xs ${(stock.price - myPosition.buy_price) >= 0 ? 'bg-green-500/20' : 'bg-red-500/20'}`}>
+            <div className="flex justify-between">
+              <span className="text-slate-500">Your P/L:</span>
+              <span className={`font-bold ${(stock.price - myPosition.buy_price) >= 0 ? 'text-green-500' : 'text-red-500'}`}>
                 {(stock.price - myPosition.buy_price) >= 0 ? '+' : ''}
                 {formatCurrency((stock.price - myPosition.buy_price) * myPosition.shares)}
                 {' '}({(((stock.price - myPosition.buy_price) / myPosition.buy_price) * 100).toFixed(2)}%)
@@ -1991,59 +1976,59 @@ const StockCard = ({
           </div>
         )}
 
-        <MiniChart data={stock.historicalData} isPositive={isPositive} />
+        <MiniChart data={stock.historicalData} isPositive={isPositive} height={40} />
 
-        <div className="grid grid-cols-5 gap-1 mt-3 text-center text-xs">
+        <div className="grid grid-cols-5 gap-1 mt-2 text-center text-xs">
           {['1W', '1M', '3M', 'YTD', '1Y'].map(period => (
             <div key={period}>
-              <div className="text-slate-400">{period}</div>
-              <PerformanceCell value={stock.performance?.[period]} />
+              <div className="text-slate-400 text-xs">{period}</div>
+              <PerformanceCell value={stock.performance?.[period]} small />
             </div>
           ))}
         </div>
 
-        <div className="flex gap-2 mt-3 text-xs">
+        <div className="flex gap-1.5 mt-2 text-xs">
           {stockNotes.length > 0 && (
-            <span className="bg-blue-500/20 text-blue-400 px-2 py-1 rounded flex items-center gap-1">
-              <MessageSquare className="w-3 h-3" /> {stockNotes.length}
+            <span className="bg-blue-500/20 text-blue-500 px-1.5 py-0.5 rounded flex items-center gap-1">
+              <MessageSquare className="w-2.5 h-2.5" /> {stockNotes.length}
             </span>
           )}
           {stockPositions.length > 0 && (
-            <span className="bg-green-500/20 text-green-400 px-2 py-1 rounded flex items-center gap-1">
-              <DollarSign className="w-3 h-3" /> {stockPositions.length}
+            <span className="bg-green-500/20 text-green-500 px-1.5 py-0.5 rounded flex items-center gap-1">
+              <DollarSign className="w-2.5 h-2.5" /> {stockPositions.length}
             </span>
           )}
         </div>
 
         <button onClick={() => onExpand(stock.symbol)}
-          className="w-full mt-3 py-2 text-slate-400 hover:text-white hover:bg-slate-700 transition-colors flex items-center justify-center gap-1 rounded">
-          {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-          {isExpanded ? 'Less' : 'More Details'}
+          className="w-full mt-2 py-1.5 text-xs text-slate-400 hover:text-blue-500 hover:bg-blue-50 transition-colors flex items-center justify-center gap-1 rounded-lg border border-slate-200">
+          {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+          {isExpanded ? 'Less' : 'More'}
         </button>
       </div>
 
       {isExpanded && (
-        <div className="border-t border-slate-700 p-5 bg-slate-850 space-y-4">
+        <div className="border-t border-slate-200 p-4 bg-slate-50 space-y-3">
           <LargeChart data={stock.historicalData} symbol={stock.symbol} />
           
           <div>
-            <h3 className="text-sm font-semibold text-slate-400 mb-2">Key Stats</h3>
-            <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
+            <h3 className="text-xs font-semibold text-slate-500 mb-2">Key Stats</h3>
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
               <div className="flex justify-between">
                 <span className="text-slate-400">Market Cap</span>
-                <span className="text-white">{formatLargeNumber(stock.marketCap)}</span>
+                <span className="text-slate-700 font-medium">{formatLargeNumber(stock.marketCap)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Day High</span>
-                <span className="text-white">{formatCurrency(stock.dayHigh)}</span>
+                <span className="text-slate-700 font-medium">{formatCurrency(stock.dayHigh)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Day Low</span>
-                <span className="text-white">{formatCurrency(stock.dayLow)}</span>
+                <span className="text-slate-700 font-medium">{formatCurrency(stock.dayLow)}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-slate-400">Prev Close</span>
-                <span className="text-white">{formatCurrency(stock.previousClose)}</span>
+                <span className="text-slate-700 font-medium">{formatCurrency(stock.previousClose)}</span>
               </div>
             </div>
           </div>
@@ -2580,14 +2565,16 @@ const StockDashboard = () => {
         {/* Header */}
         <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-6 gap-4">
           <div>
-            <div className="flex items-center gap-3 mb-2">
+            <div className="flex items-center gap-3 mb-1">
+              <span className="text-3xl md:text-4xl">🐂</span>
               <h1 className={`text-3xl md:text-4xl font-semibold ${theme === 'dark' ? 'text-white' : 'text-slate-800'}`} style={{ letterSpacing: '-0.02em' }}>Bullpen</h1>
               <span className={`flex items-center gap-1.5 text-sm px-3 py-1 rounded-full font-medium ${isConnected ? 'text-green-400 bg-green-500/10' : 'text-yellow-400 bg-yellow-500/10'}`}>
                 <span className={`w-2 h-2 rounded-full ${isConnected ? 'bg-green-400' : 'bg-yellow-400'}`} style={{ boxShadow: isConnected ? '0 0 8px rgba(52,199,89,0.5)' : 'none' }}></span>
                 {isConnected ? 'Live' : 'Offline'}
               </span>
             </div>
-            <p className={theme === 'dark' ? 'text-slate-400' : 'text-slate-500'}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
+            <p className={`text-sm mb-1 ${theme === 'dark' ? 'text-slate-300' : 'text-slate-600'}`}>Track stocks. Compete with friends.</p>
+            <p className={`text-xs ${theme === 'dark' ? 'text-slate-500' : 'text-slate-400'}`}>{lastUpdate ? `Updated ${lastUpdate.toLocaleTimeString()}` : 'Loading...'}</p>
           </div>
 
           <div className="flex items-center gap-2">
